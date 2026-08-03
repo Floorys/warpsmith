@@ -1,0 +1,109 @@
+:root {
+    --bg-color: #0f172a;
+    --container-bg: #1e293b;
+    --text-color: #f8fafc;
+    --primary: #3b82f6;
+    --primary-hover: #2563eb;
+    --border: #334155;
+    --input-bg: #0f172a;
+}
+
+body {
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    margin: 0;
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+    min-height: 100vh;
+}
+
+.container {
+    background-color: var(--container-bg);
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+    max-width: 600px;
+    width: 100%;
+}
+
+h1 {
+    text-align: center;
+    margin-top: 0;
+    font-size: 24px;
+    color: #60a5fa;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+label {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+input, select, textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background-color: var(--input-bg);
+    color: var(--text-color);
+    font-family: monospace;
+    box-sizing: border-box;
+}
+
+textarea {
+    resize: vertical;
+    min-height: 150px;
+}
+
+.grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+.grid-4 {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+}
+
+button {
+    background-color: var(--primary);
+    color: white;
+    border: none;
+    padding: 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    width: 100%;
+    font-size: 16px;
+    font-weight: bold;
+    transition: background 0.2s;
+    margin-top: 10px;
+}
+
+button:hover {
+    background-color: var(--primary-hover);
+}
+
+.btn-secondary {
+    background-color: #475569;
+    margin-top: 0;
+}
+.btn-secondary:hover {
+    background-color: #334155;
+}
+
+.section-title {
+    margin-top: 25px;
+    margin-bottom: 10px;
+    font-size: 18px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 5px;
+}
