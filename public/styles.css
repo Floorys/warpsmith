@@ -325,6 +325,117 @@ summary:focus-visible {
 	background: var(--accent-soft);
 	color: var(--text);
 }
+.note--warn {
+	background: var(--orange-soft);
+	color: var(--text);
+	border-color: var(--orange);
+}
+
+/* ------------------------------- language ------------------------------- */
+
+.lang {
+	display: inline-flex;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	overflow: hidden;
+	background: var(--canvas);
+}
+.lang__btn {
+	border: 0;
+	background: transparent;
+	color: var(--text-2);
+	font: inherit;
+	font-size: 12px;
+	font-weight: 600;
+	padding: 4px 10px;
+	cursor: pointer;
+}
+.lang__btn:hover {
+	background: var(--surface);
+	color: var(--text);
+}
+.lang__btn.is-active {
+	background: var(--accent);
+	color: #fff;
+}
+
+/* -------------------------- profiles + mimicry -------------------------- */
+
+.profiles__group {
+	font-size: 11px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--text-2);
+	margin-top: 4px;
+}
+.profiles__group:not(:first-child) {
+	margin-top: 12px;
+}
+.tag--warn {
+	color: var(--orange);
+	background: var(--orange-soft);
+}
+.mimicry {
+	margin-top: 18px;
+	padding: 14px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--surface);
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+.mimicry .field__hint {
+	margin: 0;
+}
+.sigs {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+	gap: 8px;
+}
+.sig {
+	display: flex;
+	gap: 8px;
+	align-items: flex-start;
+	padding: 9px 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--canvas);
+	cursor: pointer;
+}
+.sig:hover {
+	background: var(--surface-2);
+}
+.sig.is-active {
+	border-color: var(--accent);
+	background: var(--accent-soft);
+}
+.sig input {
+	margin: 0;
+	margin-top: 2px;
+	flex: none;
+	width: 16px;
+	height: 16px;
+	accent-color: var(--accent);
+}
+.sig__body {
+	min-width: 0;
+}
+.sig__name {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 13px;
+	font-weight: 500;
+	flex-wrap: wrap;
+}
+.sig__desc {
+	font-size: 11px;
+	color: var(--text-2);
+	line-height: 1.4;
+	margin-top: 2px;
+}
 
 .note details {
 	margin-top: 8px;

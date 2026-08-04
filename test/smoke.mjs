@@ -8,9 +8,15 @@ import assert from "node:assert/strict"
 process.env.MOCK_WARP = "1"
 
 const { generateProfile } = await import("../src/core/generate.js")
-const { generateObfuscation, validateObfuscation, PROFILES } = await import(
-	"../src/core/amnezia.js"
-)
+const {
+	generateObfuscation,
+	validateObfuscation,
+	renderObfuscationLines,
+	deriveWarpHeaders,
+	buildTlsClientHello,
+	PROFILES,
+} = await import("../src/core/amnezia.js")
+const { createRng } = await import("../src/core/rand.js")
 const { generateKeyPair, derivePublicKey } = await import("../src/core/keys.js")
 const { calculateMtu } = await import("../src/core/mtu.js")
 const { buildEndpoint } = await import("../src/core/endpoints.js")
@@ -57,22 +63,152 @@ for (const profileId of Object.keys(PROFILES)) {
 		const p = result.params
 		assert.ok(p.jmin < p.jmax, "Jmin must be < Jmax")
 		assert.notEqual(p.s1 + 56, p.s2, "S1 + 56 must not equal S2")
-		assert.equal(new Set([p.h1, p.h2, p.h3, p.h4]).size, 4, "H1-H4 must be distinct")
-		for (const h of [p.h1, p.h2, p.h3, p.h4]) {
-			assert.ok(h >= 5 && h <= 2147483647, `H value ${h} out of range`)
+
+		if (p.h1 !== undefined) {
+			assert.equal(new Set([p.h1, p.h2, p.h3, p.h4]).size, 4, "H1-H4 must be distinct")
+			for (const h of [p.h1, p.h2, p.h3, p.h4]) {
+				assert.ok(h >= 5 && h <= 2147483647, `H value ${h} out of range`)
+			}
 		}
 	})
 }
 
+// ---------------------------------------------------------------------------
+// The regression suite for the bug that made real configs fail to connect:
+// Cloudflare WARP speaks stock WireGuard, so S1/S2 padding, random magic
+// headers and 1.5 fake packets all silently kill the handshake.
+// ---------------------------------------------------------------------------
+
+for (const [profileId, preset] of Object.entries(PROFILES)) {
+	if (preset.compat !== "warp") continue
+	await test(`WARP profile "${profileId}" stays wire-compatible with stock WireGuard`, () => {
+		const result = generateObfuscation({ profile: profileId, seed: "warpcompat" })
+		if (!result.enabled) return
+		const p = result.params
+		assert.equal(p.s1, 0, "S1 must be 0 or Cloudflare drops the handshake initiation")
+		assert.equal(p.s2, 0, "S2 must be 0 or Cloudflare drops the handshake response")
+		assert.equal(p.h1, undefined, "random H1-H4 would break the WARP handshake")
+		assert.equal(result.signatures.length, 0, "I1-I5 need an AmneziaWG server")
+
+		const lines = renderObfuscationLines(result)
+		assert.ok(
+			!lines.some((l) => /^(S[12]|H[1-4]|I[1-5]) /.test(l)),
+			`WARP config must not emit S/H/I lines, got: ${lines.join(", ")}`,
+		)
+		assert.ok(lines.some((l) => l.startsWith("Jc = ")), "junk packets are the one safe knob")
+	})
+}
+
+await test("padded handshakes are rejected for WARP", () => {
+	const r = validateObfuscation(
+		{ enabled: true, jc: 4, jmin: 40, jmax: 200, s1: 50, s2: 70 },
+		{ compat: "warp" },
+	)
+	assert.equal(r.valid, false)
+	assert.ok(r.errors.some((e) => e.includes("S1 must be 0")))
+	assert.ok(r.errors.some((e) => e.includes("S2 must be 0")))
+})
+
+await test("random magic headers are rejected for WARP", () => {
+	const r = validateObfuscation(
+		{ enabled: true, jc: 4, jmin: 40, jmax: 200, s1: 0, s2: 0, h1: 11, h2: 22, h3: 33, h4: 44 },
+		{ compat: "warp" },
+	)
+	assert.equal(r.valid, false)
+	assert.ok(r.errors.some((e) => e.includes("H1-H4 cannot be random")))
+})
+
+await test("client_id derived headers keep the real WireGuard message type", () => {
+	const h = deriveWarpHeaders([0x2a, 0xdd, 0x5b])
+	assert.ok(h, "a non-zero client_id must yield headers")
+	assert.equal(h.h1 & 0xff, 1, "low byte must stay message type 1 (initiation)")
+	assert.equal(h.h2 & 0xff, 2, "low byte must stay message type 2 (response)")
+	assert.equal(h.h3 & 0xff, 3, "low byte must stay message type 3 (cookie)")
+	assert.equal(h.h4 & 0xff, 4, "low byte must stay message type 4 (transport)")
+	assert.equal(new Set(Object.values(h)).size, 4)
+	// These must survive the validator when flagged as client_id derived.
+	const r = validateObfuscation(
+		{ enabled: true, jc: 4, jmin: 40, jmax: 200, s1: 0, s2: 0, ...h },
+		{ compat: "warp", headersFromClientId: true },
+	)
+	assert.equal(r.valid, true, r.errors.join("; "))
+})
+
+await test("an unusable client_id yields no headers rather than a broken config", () => {
+	assert.equal(deriveWarpHeaders([0, 0, 0]), null, "all-zero client_id")
+	assert.equal(deriveWarpHeaders([1, 2, 200]), null, "out of AmneziaWG range")
+	assert.equal(deriveWarpHeaders(undefined), null)
+})
+
+console.log("\nprotocol mimicry")
+
+await test("the TLS ClientHello is byte-accurate and carries the chosen domain", () => {
+	for (const domain of ["github.com", "vk.com", "www.cloudflare.com"]) {
+		const { hexBytes } = buildTlsClientHello(domain, createRng("tls"))
+		const buf = Buffer.from(hexBytes, "hex")
+
+		assert.equal(buf[0], 0x16, "TLS handshake record type")
+		assert.equal(buf.readUInt16BE(1), 0x0301, "legacy record version")
+		assert.equal(buf.readUInt16BE(3), buf.length - 5, "record length must match the body")
+
+		assert.equal(buf[5], 0x01, "handshake type ClientHello")
+		const hsLen = (buf[6] << 16) | (buf[7] << 8) | buf[8]
+		assert.equal(hsLen, buf.length - 9, "handshake length must match the body")
+
+		assert.ok(buf.includes(Buffer.from(domain, "ascii")), `SNI ${domain} must appear verbatim`)
+	}
+})
+
+/**
+ * Pull the literal bytes out of an AmneziaWG packet template, i.e. every
+ * `<b 0xHEX>` chunk. Naive hex-stripping is wrong here because the DSL itself
+ * contains the hex-looking letters b, a..f.
+ */
+function literalBytes(template) {
+	const chunks = []
+	for (const match of template.matchAll(/<b 0x([0-9a-fA-F]+)>/g)) {
+		chunks.push(Buffer.from(match[1], "hex"))
+	}
+	return Buffer.concat(chunks)
+}
+
+await test("the mimicry domain reaches the generated I-packet", () => {
+	for (const domain of ["vk.com", "github.com"]) {
+		const result = generateObfuscation({
+			profile: "awg-mimicry",
+			seed: "mim",
+			mimicryDomain: domain,
+		})
+		assert.equal(result.mimicryDomain, domain)
+		assert.ok(result.signatures.length >= 1)
+		assert.ok(
+			literalBytes(result.signatures[0].template).includes(Buffer.from(domain)),
+			`the SNI ${domain} must appear in the actual packet bytes`,
+		)
+	}
+})
+
+await test("the DNS signature encodes the domain as length-prefixed labels", () => {
+	const result = generateObfuscation({
+		profile: "awg-mimicry",
+		seed: "dns",
+		signatures: ["dns"],
+		mimicryDomain: "github.com",
+	})
+	// "github" is 6 chars, "com" is 3 -> 06 g i t h u b 03 c o m 00
+	const qname = Buffer.from([6, ...Buffer.from("github"), 3, ...Buffer.from("com"), 0])
+	assert.ok(literalBytes(result.signatures[0].template).includes(qname))
+})
+
 await test("the same seed reproduces identical parameters", () => {
-	const a = generateObfuscation({ profile: "paranoid", seed: "deadbeef" })
-	const b = generateObfuscation({ profile: "paranoid", seed: "deadbeef" })
+	const a = generateObfuscation({ profile: "awg-paranoid", seed: "deadbeef" })
+	const b = generateObfuscation({ profile: "awg-paranoid", seed: "deadbeef" })
 	assert.deepEqual(a.params, b.params)
 })
 
 await test("different seeds produce different parameters", () => {
-	const a = generateObfuscation({ profile: "paranoid", seed: "aaaa" })
-	const b = generateObfuscation({ profile: "paranoid", seed: "bbbb" })
+	const a = generateObfuscation({ profile: "awg-paranoid", seed: "aaaa" })
+	const b = generateObfuscation({ profile: "awg-paranoid", seed: "bbbb" })
 	assert.notDeepEqual(a.params, b.params)
 })
 
@@ -153,7 +289,7 @@ await test("IPv6 endpoints are bracketed", () => {
 console.log("\nfull pipeline")
 
 await test("generates a complete AmneziaWG config", async () => {
-	const profile = await generateProfile({ obfuscation: "balanced" })
+	const profile = await generateProfile({ obfuscation: "warp-balanced" })
 	const conf = profile.configs.amneziawg.content
 
 	for (const key of [
@@ -165,12 +301,6 @@ await test("generates a complete AmneziaWG config", async () => {
 		"Jc",
 		"Jmin",
 		"Jmax",
-		"S1",
-		"S2",
-		"H1",
-		"H2",
-		"H3",
-		"H4",
 		"[Peer]",
 		"PublicKey",
 		"AllowedIPs",
@@ -178,10 +308,35 @@ await test("generates a complete AmneziaWG config", async () => {
 	]) {
 		assert.ok(conf.includes(key), `config is missing ${key}`)
 	}
+
+	// A WARP config must NOT contain these. Cloudflare speaks stock WireGuard,
+	// so emitting them is exactly the bug that produced dead configs.
+	const body = conf
+		.split("\n")
+		.filter((l) => !l.trim().startsWith("#"))
+		.join("\n")
+	for (const key of ["S1 =", "S2 =", "H1 =", "H2 =", "H3 =", "H4 =", "I1 ="]) {
+		assert.ok(!body.includes(key), `WARP config must not contain ${key}`)
+	}
+})
+
+await test("an own-server profile is loudly flagged as incompatible with WARP", async () => {
+	const profile = await generateProfile({ obfuscation: "awg-standard" })
+	const conf = profile.configs.amneziawg.content
+
+	// The full-obfuscation keys are present, as requested...
+	for (const key of ["S1 =", "H1 ="]) {
+		assert.ok(conf.includes(key), `config is missing ${key}`)
+	}
+	// ...but the user must be told it will not connect to Cloudflare.
+	assert.ok(
+		profile.warnings.some((w) => w.includes("own AmneziaWG server")),
+		`expected an incompatibility warning, got: ${JSON.stringify(profile.warnings)}`,
+	)
 })
 
 await test("plain WireGuard output has no AmneziaWG keys", async () => {
-	const profile = await generateProfile({ obfuscation: "paranoid" })
+	const profile = await generateProfile({ obfuscation: "awg-paranoid" })
 	const conf = profile.configs.wireguard.content
 	const body = conf
 		.split("\n")
@@ -210,8 +365,8 @@ await test("--no-ipv6 strips v6 addresses and routes", async () => {
 })
 
 await test("reusing a seed reproduces the same obfuscation", async () => {
-	const a = await generateProfile({ seed: "cafebabe", obfuscation: "mobile" })
-	const b = await generateProfile({ seed: "cafebabe", obfuscation: "mobile" })
+	const a = await generateProfile({ seed: "cafebabe", obfuscation: "warp-light" })
+	const b = await generateProfile({ seed: "cafebabe", obfuscation: "warp-light" })
 	assert.deepEqual(a.obfuscation.params, b.obfuscation.params)
 	assert.equal(a.endpoint.endpoint, b.endpoint.endpoint)
 })
@@ -225,7 +380,7 @@ await test("reusing a private key keeps the identity", async () => {
 })
 
 await test("the mimicry profile emits I-packet templates", async () => {
-	const profile = await generateProfile({ obfuscation: "mimicry" })
+	const profile = await generateProfile({ obfuscation: "awg-mimicry" })
 	assert.ok(profile.obfuscation.signatures.length > 0)
 	assert.ok(profile.configs.amneziawg.content.includes("I1 = "))
 	assert.equal(profile.obfuscation.version, "1.5")
@@ -241,7 +396,7 @@ await test("an invalid CIDR is rejected", async () => {
 })
 
 await test("JSON output parses and carries the parameters", async () => {
-	const profile = await generateProfile({ obfuscation: "balanced" })
+	const profile = await generateProfile({ obfuscation: "warp-balanced" })
 	const parsed = JSON.parse(profile.configs.json.content)
 	assert.equal(typeof parsed.obfuscation.jc, "number")
 	assert.ok(parsed.peer.endpoint)

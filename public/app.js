@@ -8,14 +8,217 @@
 
 const $ = (id) => document.getElementById(id)
 
+// ------------------------------------------------------------------- i18n
+
+const I18N = {
+	ru: {
+		"brand.sub": "Сборщик конфигов WARP + AmneziaWG",
+		"badge.mock": "Тестовый режим",
+		"badge.connecting": "Подключение…",
+		"badge.ready": "Сервер готов",
+		"badge.down": "Сервер недоступен",
+		"common.optional": "необязательно",
+		"loc.title": "Локация",
+		"loc.scan": "Сканировать дата-центры",
+		"loc.scanning": "Сканирую",
+		"loc.why": "Почему нет выпадающего списка стран",
+		"loc.prefix": "Префикс endpoint",
+		"loc.port": "UDP-порт",
+		"loc.pin": "Закрепить точный endpoint",
+		"loc.pinHint": "Переопределяет префикс и порт выше.",
+		"loc.measure": "Измерить реальный дата-центр выхода после генерации",
+		"loc.measureHint": "Добавляет около секунды, зато показывает, где вы реально выходите.",
+		"prefix.auto": "Автоматически (случайный IPv4-префикс)",
+		"prefix.autoHint": "Префикс выбирается случайно.",
+		"port.auto": "Автоматически (случайный рабочий порт)",
+		"port.hint": "Смена порта помогает против блокировок по порту.",
+		"scan.probing": "Проверяю endpoint'ы Cloudflare и их реальные дата-центры…",
+		"scan.none": "Ни один endpoint не ответил из {n}. Возможно, Cloudflare заблокирован с этого сервера.",
+		"scan.found": "Доступно дата-центров: {n} из {total} проверок. Нажмите, чтобы закрепить.",
+		"scan.unknown": "Неизвестный центр {colo}",
+		"scan.pinned": "Закреплён {ep} ({city})",
+		"obf.title": "Обфускация",
+		"obf.reroll": "Перегенерировать",
+		"obf.params": "Сгенерированные параметры",
+		"obf.plain": "чистый WireGuard",
+		"obf.manual": "Править параметры вручную",
+		"obf.manualWarn": "У всех пиров значения должны совпадать. Ограничения проверяются на лету: Jmin < Jmax, S1 + 56 ≠ S2, и H1–H4 должны различаться.",
+		"obf.valid": "Параметры корректны.",
+		"obf.seed": "Seed",
+		"obf.seedOpt": "воспроизводит профиль",
+		"obf.seedPh": "оставьте пустым для нового",
+		"obf.seedHint": "Вставьте прошлый seed, чтобы получить точно такую же обфускацию на другом устройстве.",
+		"mim.title": "Под какой протокол маскироваться",
+		"mim.intro": "Первые пакеты туннеля будут выглядеть как выбранный протокол. Выберите до пяти.",
+		"mim.domain": "Домен для подстановки (SNI)",
+		"mim.custom": "Свой домен",
+		"mim.customHint": "Перебивает выбор слева.",
+		"mim.domainUsed": "Домен попадёт в сами байты пакета — DPI увидит обращение к нему.",
+		"mim.domainUnused": "Выбранные протоколы не используют домен.",
+		"mim.needOne": "Выберите хотя бы один протокол.",
+		"net.title": "Сеть",
+		"net.routing": "Маршрутизация",
+		"net.mtu": "MTU канала",
+		"net.keepalive": "Keepalive (секунды)",
+		"net.keepaliveHint": "0 отключает. 25 держит NAT открытым на мобильном.",
+		"net.ipv6": "Включить IPv6",
+		"net.ipv6Hint": "Выключите, если у провайдера IPv6 сломан или течёт.",
+		"net.psk": "Добавить pre-shared key",
+		"net.pskHint": "Дополнительный симметричный слой. Для WARP необязателен.",
+		"mtu.default": "Безопасное значение (MTU 1280)",
+		"mtu.defaultHint": "MTU 1280 — то же, что у официального клиента WARP. Никогда не фрагментируется.",
+		"mtu.tunnel": "MTU туннеля {mtu} ({path} минус {overhead} байт накладных).",
+		"id.title": "Идентичность",
+		"id.privateKey": "Существующий приватный ключ",
+		"id.privateKeyPh": "base64, 44 символа",
+		"id.privateKeyHint": "Переиспользуйте ключ, чтобы пересобрать конфиг, не меняя идентичность.",
+		"id.license": "Лицензия WARP+",
+		"action.generate": "Сгенерировать конфиг",
+		"action.hint": "Регистрирует новое устройство в Cloudflare и собирает конфиг. Ключи не покидают память сервера.",
+		"action.registering": "Регистрация в Cloudflare",
+		"out.empty": "Конфига пока нет",
+		"out.emptyHint": "Выберите настройки и нажмите «Сгенерировать конфиг».",
+		"out.copy": "Копировать",
+		"out.download": "Скачать",
+		"out.result": "Результат",
+		"out.copied": "Скопировано в буфер",
+		"out.copyFail": "Буфер обмена заблокирован — выделите текст вручную",
+		"out.downloaded": "Скачано {name}",
+		"out.generated": "Конфиг создан",
+		"sum.endpoint": "Endpoint",
+		"sum.exit": "Точка выхода",
+		"sum.exitUnknown": "не удалось измерить",
+		"sum.address": "Адрес",
+		"sum.mtu": "MTU",
+		"sum.account": "Аккаунт",
+		"sum.obf": "Обфускация",
+		"sum.mimicry": "Маскировка",
+		"sum.seed": "Seed",
+		footer: "Самостоятельный хостинг. Конфиги создаются по запросу и не сохраняются на диск. Держите PrivateKey в секрете.",
+	},
+	en: {
+		"brand.sub": "WARP + AmneziaWG config builder",
+		"badge.mock": "Mock mode",
+		"badge.connecting": "Connecting…",
+		"badge.ready": "Server ready",
+		"badge.down": "Server unreachable",
+		"common.optional": "optional",
+		"loc.title": "Location",
+		"loc.scan": "Scan datacenters",
+		"loc.scanning": "Scanning",
+		"loc.why": "Why there is no country dropdown",
+		"loc.prefix": "Endpoint prefix",
+		"loc.port": "UDP port",
+		"loc.pin": "Pin an exact endpoint",
+		"loc.pinHint": "Overrides the prefix and port above.",
+		"loc.measure": "Measure the real exit datacenter after generating",
+		"loc.measureHint": "Adds about a second, tells you where you actually come out.",
+		"prefix.auto": "Automatic (random IPv4 prefix)",
+		"prefix.autoHint": "A prefix is chosen at random for you.",
+		"port.auto": "Automatic (random known-good port)",
+		"port.hint": "Rotating the port helps against port-based throttling.",
+		"scan.probing": "Probing Cloudflare endpoints for their real datacenter…",
+		"scan.none": "No endpoint answered out of {n}. Cloudflare may be blocked from this server.",
+		"scan.found": "{n} datacenter(s) reachable, from {total} probes. Click one to pin it.",
+		"scan.unknown": "Unknown colo {colo}",
+		"scan.pinned": "Pinned {ep} ({city})",
+		"obf.title": "Obfuscation",
+		"obf.reroll": "Re-roll values",
+		"obf.params": "Generated parameters",
+		"obf.plain": "plain WireGuard",
+		"obf.manual": "Edit parameters by hand",
+		"obf.manualWarn": "Every peer must use identical values. Constraints are enforced live: Jmin < Jmax, S1 + 56 ≠ S2, and H1–H4 must all differ.",
+		"obf.valid": "Parameters are valid.",
+		"obf.seed": "Seed",
+		"obf.seedOpt": "reproduces a profile",
+		"obf.seedPh": "leave empty for a new one",
+		"obf.seedHint": "Paste a previous seed to rebuild the exact same obfuscation on another device.",
+		"mim.title": "Which protocol to imitate",
+		"mim.intro": "The first tunnel packets will look like the chosen protocol. Pick up to five.",
+		"mim.domain": "Domain to imitate (SNI)",
+		"mim.custom": "Custom domain",
+		"mim.customHint": "Overrides the choice on the left.",
+		"mim.domainUsed": "The domain goes into the actual packet bytes — DPI sees a request to it.",
+		"mim.domainUnused": "The selected protocols do not use a domain.",
+		"mim.needOne": "Pick at least one protocol.",
+		"net.title": "Network",
+		"net.routing": "Routing",
+		"net.mtu": "Link MTU",
+		"net.keepalive": "Keepalive (seconds)",
+		"net.keepaliveHint": "0 disables. 25 keeps NAT open on mobile.",
+		"net.ipv6": "Include IPv6",
+		"net.ipv6Hint": "Turn off if your ISP's IPv6 is broken or leaks.",
+		"net.psk": "Add a pre-shared key",
+		"net.pskHint": "Extra symmetric layer. Optional for WARP.",
+		"mtu.default": "Safe default (MTU 1280)",
+		"mtu.defaultHint": "MTU 1280 — what the official WARP client uses. Never fragments.",
+		"mtu.tunnel": "Tunnel MTU {mtu} ({path} minus {overhead} bytes overhead).",
+		"id.title": "Identity",
+		"id.privateKey": "Existing private key",
+		"id.privateKeyPh": "base64, 44 characters",
+		"id.privateKeyHint": "Reuse a key to regenerate a config without changing your identity.",
+		"id.license": "WARP+ license",
+		"action.generate": "Generate config",
+		"action.hint": "Registers a fresh device with Cloudflare, then builds the config. Keys never leave this server's memory.",
+		"action.registering": "Registering with Cloudflare",
+		"out.empty": "No config yet",
+		"out.emptyHint": "Pick your settings, then press Generate config.",
+		"out.copy": "Copy",
+		"out.download": "Download",
+		"out.result": "Result",
+		"out.copied": "Copied to clipboard",
+		"out.copyFail": "Clipboard blocked — select the text manually",
+		"out.downloaded": "Downloaded {name}",
+		"out.generated": "Config generated",
+		"sum.endpoint": "Endpoint",
+		"sum.exit": "Exit",
+		"sum.exitUnknown": "could not be measured",
+		"sum.address": "Address",
+		"sum.mtu": "MTU",
+		"sum.account": "Account",
+		"sum.obf": "Obfuscation",
+		"sum.mimicry": "Mimicry",
+		"sum.seed": "Seed",
+		footer: "Self-hosted. Configs are generated on request and never stored on disk. Keep your PrivateKey secret.",
+	},
+}
+
 const state = {
+	lang: localStorage.getItem("awg-lang") || "ru",
 	options: null,
-	profile: "balanced",
+	profile: "warp-balanced",
+	signatures: [],
+	mimicryDomain: "",
 	obfuscation: null,
 	overrides: {},
 	result: null,
 	tab: "amneziawg",
 	busy: false,
+}
+
+/** Translate a key, interpolating {placeholders}. */
+function t(key, vars) {
+	const dict = I18N[state.lang] || I18N.ru
+	let text = dict[key] ?? I18N.ru[key] ?? key
+	if (vars) {
+		for (const [name, value] of Object.entries(vars)) {
+			text = text.replaceAll(`{${name}}`, String(value))
+		}
+	}
+	return text
+}
+
+/**
+ * Prefer a Russian field from the API when the UI is in Russian.
+ * `pickText(profile, "label")` reads `labelRu` first, then `label`.
+ */
+function pickText(object, field) {
+	if (!object) return ""
+	if (state.lang === "ru") {
+		const ru = object[`${field}Ru`]
+		if (ru) return ru
+	}
+	return object[field] ?? ""
 }
 
 const OVERRIDE_FIELDS = [
@@ -77,17 +280,71 @@ function el(tag, className, text) {
 	return node
 }
 
+// --------------------------------------------------------------- language
+
+function applyStaticI18n() {
+	document.documentElement.lang = state.lang
+	for (const node of document.querySelectorAll("[data-i18n]")) {
+		node.textContent = t(node.dataset.i18n)
+	}
+	for (const node of document.querySelectorAll("[data-i18n-ph]")) {
+		node.placeholder = t(node.dataset.i18nPh)
+	}
+	$("langRu").classList.toggle("is-active", state.lang === "ru")
+	$("langEn").classList.toggle("is-active", state.lang === "en")
+	$("advancedWarn").textContent = t("obf.manualWarn")
+}
+
+/** Re-render everything that carries text coming from the API. */
+function setLanguage(lang) {
+	state.lang = lang
+	localStorage.setItem("awg-lang", lang)
+	applyStaticI18n()
+
+	const options = state.options
+	if (!options) return
+
+	const prefix = $("endpointPrefix").value
+	const port = $("endpointPort").value
+	const allowed = $("allowedIps").value
+	const dns = $("dns").value
+	const mtu = $("pathMtu").value
+
+	renderLocality(options.locationReality)
+	renderPrefixes(options.endpointPrefixes)
+	renderPorts(options.endpointPorts, options.camouflagePorts)
+	renderProfiles(options.obfuscationProfiles)
+	renderSignatures(options.signatures)
+	renderMimicryDomains(options.mimicryDomains)
+	renderSelect($("allowedIps"), options.allowedIps, allowed)
+	renderSelect($("dns"), options.dns, dns)
+	renderPathMtu(options.pathMtuPresets)
+
+	$("endpointPrefix").value = prefix
+	$("endpointPort").value = port
+	$("pathMtu").value = mtu
+
+	updateAllowedHint()
+	updateMtuHint()
+	updateCompatNote()
+	if (state.obfuscation) renderParams(state.obfuscation)
+	if (state.result) renderSummary(state.result)
+}
+
 // --------------------------------------------------------------- bootstrap
 
 async function init() {
+	applyStaticI18n()
 	try {
 		const [options, health] = await Promise.all([
 			api("/api/options"),
 			api("/api/health"),
 		])
 		state.options = options
+		state.profile = options.defaultProfile || state.profile
+		state.mimicryDomain = options.defaultMimicryDomain || ""
 
-		$("healthBadge").textContent = "Server ready"
+		$("healthBadge").textContent = t("badge.ready")
 		$("healthBadge").className = "pill pill--ok"
 		$("mockBadge").hidden = !health.mock
 
@@ -95,100 +352,224 @@ async function init() {
 		renderPrefixes(options.endpointPrefixes)
 		renderPorts(options.endpointPorts, options.camouflagePorts)
 		renderProfiles(options.obfuscationProfiles)
+		renderSignatures(options.signatures)
+		renderMimicryDomains(options.mimicryDomains)
 		renderSelect($("allowedIps"), options.allowedIps, "full")
 		renderSelect($("dns"), options.dns, "cloudflare")
 		renderPathMtu(options.pathMtuPresets)
 		renderOverrideFields()
 
 		updateAllowedHint()
+		updateCompatNote()
 		await refreshObfuscation()
 	} catch (error) {
-		$("healthBadge").textContent = "Server unreachable"
+		$("healthBadge").textContent = t("badge.down")
 		$("healthBadge").className = "pill pill--err"
 		toast(error.message, "error")
 	}
 }
 
 function renderLocality(reality) {
-	$("localitySummary").textContent = reality.summary
-	const ul = $("localityDetails")
-	ul.replaceChildren(...reality.details.map((d) => el("li", null, d)))
+	$("localitySummary").textContent = pickText(reality, "summary")
+	const details = state.lang === "ru" && reality.detailsRu ? reality.detailsRu : reality.details
+	$("localityDetails").replaceChildren(...details.map((d) => el("li", null, d)))
 }
 
 function renderPrefixes(prefixes) {
 	const select = $("endpointPrefix")
 	select.replaceChildren()
-	const auto = new Option("Automatic (random IPv4 prefix)", "")
-	select.append(auto)
+	select.append(new Option(t("prefix.auto"), ""))
 	for (const p of prefixes) {
 		const opt = new Option(`${p.cidr}${p.family === 6 ? "  (IPv6)" : ""}`, p.id)
-		opt.dataset.note = p.note
+		opt.dataset.note = pickText(p, "note")
 		opt.dataset.family = String(p.family)
 		select.append(opt)
 	}
-	select.addEventListener("change", () => {
-		const opt = select.selectedOptions[0]
-		$("prefixHint").textContent = opt?.dataset.note || "A prefix is chosen at random for you."
-	})
-	$("prefixHint").textContent = "A prefix is chosen at random for you."
+	select.onchange = () => {
+		$("prefixHint").textContent = select.selectedOptions[0]?.dataset.note || t("prefix.autoHint")
+	}
+	$("prefixHint").textContent = t("prefix.autoHint")
 }
 
 function renderPorts(ports, camouflage) {
 	const select = $("endpointPort")
 	select.replaceChildren()
-	select.append(new Option("Automatic (random known-good port)", ""))
+	select.append(new Option(t("port.auto"), ""))
 	for (const port of ports) {
 		const hint = camouflage[port]
 		const opt = new Option(hint ? `${port}  -  ${hint.split(" (")[0]}` : String(port), String(port))
 		if (hint) opt.dataset.note = hint
 		select.append(opt)
 	}
-	select.addEventListener("change", () => {
-		const opt = select.selectedOptions[0]
-		$("portHint").textContent =
-			opt?.dataset.note || "Rotating the port helps against port-based throttling."
-	})
-	$("portHint").textContent = "Rotating the port helps against port-based throttling."
+	select.onchange = () => {
+		$("portHint").textContent = select.selectedOptions[0]?.dataset.note || t("port.hint")
+	}
+	$("portHint").textContent = t("port.hint")
 }
 
+// ---------------------------------------------------------------- profiles
+
+function currentProfile() {
+	return state.options?.obfuscationProfiles.find((p) => p.id === state.profile)
+}
+
+/**
+ * Profiles are grouped by what they are compatible with, because mixing them
+ * up is exactly what produces a config that imports fine and never connects.
+ */
 function renderProfiles(profiles) {
 	const wrap = $("profiles")
 	wrap.replaceChildren()
-	for (const p of profiles) {
-		const label = el("label", "profile")
-		if (p.id === state.profile) label.classList.add("is-active")
 
+	const groups = state.options?.compat || []
+	const order = groups.length ? groups : [{ id: "warp" }, { id: "awg" }]
+
+	for (const group of order) {
+		const inGroup = profiles.filter((p) => (p.compat || "warp") === group.id)
+		if (!inGroup.length) continue
+
+		if (group.label || group.labelRu) {
+			wrap.append(el("div", "profiles__group", pickText(group, "label")))
+		}
+
+		for (const p of inGroup) {
+			const label = el("label", "profile")
+			if (p.id === state.profile) label.classList.add("is-active")
+
+			const input = document.createElement("input")
+			input.type = "radio"
+			input.name = "obfProfile"
+			input.value = p.id
+			input.checked = p.id === state.profile
+
+			const body = el("div", "profile__body")
+			const name = el("div", "profile__name")
+			name.append(el("span", null, pickText(p, "label")))
+			if (p.version === "1.5") name.append(el("span", "tag", "AWG 1.5"))
+			if (p.worksWithWarp === false) name.append(el("span", "tag tag--warn", "≠ WARP"))
+			body.append(name, el("div", "profile__desc", pickText(p, "summary")))
+
+			label.append(input, body)
+			wrap.append(label)
+
+			input.addEventListener("change", async () => {
+				state.profile = p.id
+				state.overrides = {}
+				for (const node of wrap.querySelectorAll(".profile")) {
+					node.classList.toggle("is-active", node.contains(input))
+				}
+				updateCompatNote()
+				await refreshObfuscation()
+			})
+		}
+	}
+}
+
+/** Warn loudly when the chosen profile cannot talk to Cloudflare. */
+function updateCompatNote() {
+	const profile = currentProfile()
+	const note = $("compatNote")
+	if (!profile) {
+		note.hidden = true
+		return
+	}
+	const group = state.options?.compat?.find((c) => c.id === (profile.compat || "warp"))
+	const text = pickText(group, "note")
+	note.hidden = !text
+	$("compatNoteText").textContent = text
+	note.classList.toggle("note--warn", profile.worksWithWarp === false)
+	note.classList.toggle("note--info", profile.worksWithWarp !== false)
+	updateMimicryVisibility()
+}
+
+// ---------------------------------------------------------------- mimicry
+
+function renderSignatures(signatures) {
+	const wrap = $("mimicrySignatures")
+	if (!wrap || !signatures) return
+	wrap.replaceChildren()
+
+	for (const sig of signatures) {
+		const label = el("label", "sig")
 		const input = document.createElement("input")
-		input.type = "radio"
-		input.name = "obfProfile"
-		input.value = p.id
-		input.checked = p.id === state.profile
+		input.type = "checkbox"
+		input.value = sig.id
+		input.checked = state.signatures.includes(sig.id)
 
-		const body = el("div", "profile__body")
-		const name = el("div", "profile__name")
-		name.append(el("span", null, p.label))
-		if (p.version === "1.5") name.append(el("span", "tag", "AWG 1.5"))
-		body.append(name, el("div", "profile__desc", p.summary))
+		const body = el("div", "sig__body")
+		const head = el("div", "sig__name")
+		head.append(el("span", null, pickText(sig, "label")))
+		if (sig.usesDomain) head.append(el("span", "tag", "SNI"))
+		body.append(head, el("div", "sig__desc", pickText(sig, "description")))
 
 		label.append(input, body)
 		wrap.append(label)
 
 		input.addEventListener("change", async () => {
-			state.profile = p.id
-			state.overrides = {}
-			for (const node of wrap.querySelectorAll(".profile")) {
-				node.classList.toggle("is-active", node.contains(input))
+			const picked = [...wrap.querySelectorAll("input:checked")].map((i) => i.value)
+			if (!picked.length) {
+				input.checked = true
+				toast(t("mim.needOne"), "error")
+				return
 			}
+			state.signatures = picked.slice(0, 5)
+			label.classList.toggle("is-active", input.checked)
+			updateDomainHint()
 			await refreshObfuscation()
 		})
+		label.classList.toggle("is-active", input.checked)
 	}
 }
+
+function renderMimicryDomains(domains) {
+	const select = $("mimicryDomain")
+	if (!select || !domains) return
+	select.replaceChildren()
+	for (const domain of domains) {
+		const id = typeof domain === "string" ? domain : domain.id
+		const label = typeof domain === "string" ? domain : pickText(domain, "label") || domain.id
+		select.append(new Option(label, id))
+	}
+	if (state.mimicryDomain) select.value = state.mimicryDomain
+	select.onchange = async () => {
+		state.mimicryDomain = select.value
+		await refreshObfuscation()
+	}
+	updateDomainHint()
+}
+
+/** The mimicry block only makes sense for AmneziaWG 1.5 profiles. */
+function updateMimicryVisibility() {
+	const profile = currentProfile()
+	const supportsMimicry = profile?.version === "1.5"
+	$("mimicryWrap").hidden = !supportsMimicry
+	if (supportsMimicry && !state.signatures.length) {
+		state.signatures = state.obfuscation?.signatures?.map((s) => s.id) || ["tls", "quic"]
+		renderSignatures(state.options?.signatures)
+	}
+	updateDomainHint()
+}
+
+function updateDomainHint() {
+	const all = state.options?.signatures || []
+	const usesDomain = state.signatures.some((id) => all.find((s) => s.id === id)?.usesDomain)
+	$("mimicryDomain").disabled = !usesDomain
+	$("mimicryDomainCustom").disabled = !usesDomain
+	$("mimicryDomainHint").textContent = usesDomain ? t("mim.domainUsed") : t("mim.domainUnused")
+}
+
+function resolvedDomain() {
+	return $("mimicryDomainCustom").value.trim() || $("mimicryDomain").value || undefined
+}
+
+// ----------------------------------------------------------------- fields
 
 function renderSelect(select, items, defaultId) {
 	select.replaceChildren()
 	for (const item of items) {
-		const opt = new Option(item.label, item.id)
-		if (item.note) opt.dataset.note = item.note
+		const opt = new Option(pickText(item, "label"), item.id)
+		const note = pickText(item, "note")
+		if (note) opt.dataset.note = note
 		select.append(opt)
 	}
 	select.value = defaultId
@@ -197,31 +578,34 @@ function renderSelect(select, items, defaultId) {
 function renderPathMtu(presets) {
 	const select = $("pathMtu")
 	select.replaceChildren()
-	select.append(new Option("Safe default (MTU 1280)", ""))
+	select.append(new Option(t("mtu.default"), ""))
 	for (const p of presets) {
-		select.append(new Option(p.label, String(p.pathMtu)))
+		select.append(new Option(pickText(p, "label"), String(p.pathMtu)))
 	}
-	select.addEventListener("change", updateMtuHint)
+	select.onchange = updateMtuHint
 	updateMtuHint()
 }
 
 async function updateMtuHint() {
 	const raw = $("pathMtu").value
 	if (!raw) {
-		$("mtuHint").textContent = "MTU 1280 - what the official WARP client uses. Never fragments."
+		$("mtuHint").textContent = t("mtu.defaultHint")
 		return
 	}
 	try {
 		const info = await api("/api/mtu", { pathMtu: Number(raw), outerFamily: 4 })
-		$("mtuHint").textContent = `Tunnel MTU ${info.mtu} (${info.pathMtu} minus ${info.overhead} bytes overhead).`
+		$("mtuHint").textContent = t("mtu.tunnel", {
+			mtu: info.mtu,
+			path: info.pathMtu,
+			overhead: info.overhead,
+		})
 	} catch {
 		$("mtuHint").textContent = ""
 	}
 }
 
 function updateAllowedHint() {
-	const opt = $("allowedIps").selectedOptions[0]
-	$("allowedHint").textContent = opt?.dataset.note || ""
+	$("allowedHint").textContent = $("allowedIps").selectedOptions[0]?.dataset.note || ""
 }
 
 function renderOverrideFields() {
@@ -243,9 +627,13 @@ function renderOverrideFields() {
 
 async function refreshObfuscation(seed) {
 	try {
+		const profile = currentProfile()
+		const useMimicry = profile?.version === "1.5"
 		const result = await api("/api/obfuscation", {
 			profile: state.profile,
 			seed: seed || $("seed").value.trim() || undefined,
+			signatures: useMimicry && state.signatures.length ? state.signatures : undefined,
+			mimicryDomain: useMimicry ? resolvedDomain() : undefined,
 		})
 		state.obfuscation = result
 		renderParams(result)
@@ -262,8 +650,8 @@ function renderParams(obf) {
 	list.replaceChildren()
 
 	if (!obf.enabled) {
-		version.textContent = "plain WireGuard"
-		const row = el("div", "param__what", obf.summary)
+		version.textContent = t("obf.plain")
+		const row = el("div", "param__what", pickText(obf, "summary"))
 		row.style.gridColumn = "1"
 		list.append(row)
 		$("advancedWrap").hidden = true
@@ -277,7 +665,7 @@ function renderParams(obf) {
 		const wrap = el("div", "param")
 		wrap.append(el("dt", "param__key", row.key))
 		wrap.append(el("dd", "param__val", String(row.value)))
-		wrap.append(el("dd", "param__what", row.what))
+		wrap.append(el("dd", "param__what", pickText(row, "what")))
 		list.append(wrap)
 	}
 }
@@ -303,7 +691,10 @@ function onOverrideInput() {
 		}
 		state.overrides = params
 		try {
-			const validation = await api("/api/validate", { params })
+			const validation = await api("/api/validate", {
+				params,
+				compat: currentProfile()?.compat,
+			})
 			renderValidation(validation)
 			highlightBadFields(validation.errors)
 		} catch (error) {
@@ -333,7 +724,7 @@ function renderValidation(validation) {
 		wrap.append(el("div", "msg msg--warn", warning))
 	}
 	if (validation.valid && !validation.warnings.length) {
-		wrap.append(el("div", "msg msg--ok", "Parameters are valid."))
+		wrap.append(el("div", "msg msg--ok", t("obf.valid")))
 	}
 }
 
@@ -341,20 +732,20 @@ function renderValidation(validation) {
 
 async function runScan() {
 	const button = $("scanBtn")
-	setBusy(button, true, "Scanning")
+	setBusy(button, true, t("loc.scanning"))
 	$("scanPanel").hidden = false
-	$("scanStatus").textContent = "Probing Cloudflare endpoints for their real datacenter..."
+	$("scanStatus").textContent = t("scan.probing")
 	$("scanList").replaceChildren()
 
 	try {
 		const { scanned, byLocation } = await api("/api/scan", { perPrefix: 2 })
 
 		if (!byLocation.length) {
-			$("scanStatus").textContent = `No endpoint answered out of ${scanned}. Cloudflare may be blocked from this server.`
+			$("scanStatus").textContent = t("scan.none", { n: scanned })
 			return
 		}
 
-		$("scanStatus").textContent = `${byLocation.length} datacenter(s) reachable, from ${scanned} probes. Click one to pin it.`
+		$("scanStatus").textContent = t("scan.found", { n: byLocation.length, total: scanned })
 
 		for (const loc of byLocation) {
 			const best = loc.endpoints[0]
@@ -362,13 +753,17 @@ async function runScan() {
 			locBtn.type = "button"
 			locBtn.append(el("span", "loc__colo", loc.colo))
 			locBtn.append(
-				el("span", "loc__name", loc.known ? `${loc.city}, ${loc.country}` : `Unknown colo ${loc.colo}`),
+				el(
+					"span",
+					"loc__name",
+					loc.known ? `${loc.city}, ${loc.country}` : t("scan.unknown", { colo: loc.colo }),
+				),
 			)
 			locBtn.append(el("span", "loc__rtt", `${loc.bestRttMs} ms`))
 			locBtn.addEventListener("click", () => {
 				const port = $("endpointPort").value || "2408"
 				$("endpointHost").value = `${best.ip}:${port}`
-				toast(`Pinned ${best.ip}:${port} (${loc.city})`)
+				toast(t("scan.pinned", { ep: `${best.ip}:${port}`, city: loc.city }))
 			})
 			$("scanList").append(locBtn)
 		}
@@ -385,7 +780,7 @@ async function generate() {
 	const button = $("generateBtn")
 	if (state.busy) return
 	state.busy = true
-	setBusy(button, true, "Registering with Cloudflare")
+	setBusy(button, true, t("action.registering"))
 
 	const hasOverrides =
 		$("advancedWrap").open &&
@@ -393,11 +788,14 @@ async function generate() {
 		OVERRIDE_FIELDS.every((f) => Number.isFinite(state.overrides[f.key]))
 
 	const pathMtu = $("pathMtu").value
+	const useMimicry = currentProfile()?.version === "1.5"
 
 	try {
 		const result = await api("/api/generate", {
 			obfuscation: state.profile,
 			obfuscationOverrides: hasOverrides ? state.overrides : undefined,
+			signatures: useMimicry && state.signatures.length ? state.signatures : undefined,
+			mimicryDomain: useMimicry ? resolvedDomain() : undefined,
 			seed: $("seed").value.trim() || undefined,
 			privateKey: $("privateKey").value.trim() || undefined,
 			license: $("license").value.trim() || undefined,
@@ -418,7 +816,7 @@ async function generate() {
 		$("seed").value = result.meta.seed
 		renderOutput()
 		renderSummary(result)
-		toast("Config generated")
+		toast(t("out.generated"))
 	} catch (error) {
 		toast(error.hint ? `${error.message} - ${error.hint}` : error.message, "error")
 	} finally {
@@ -465,22 +863,28 @@ function renderSummary(result) {
 	card.hidden = false
 	list.replaceChildren()
 
+	const obf = result.obfuscation
 	const rows = [
-		["Endpoint", result.endpoint.endpoint],
-		["Address", result.network.addresses.join(", ")],
-		["MTU", String(result.network.mtu)],
-		["Account", result.warp.accountType + (result.warp.warpPlus ? " (WARP+)" : "")],
-		["Obfuscation", result.obfuscation.profileLabel],
-		["Seed", result.meta.seed],
+		[t("sum.endpoint"), result.endpoint.endpoint],
+		[t("sum.address"), result.network.addresses.join(", ")],
+		[t("sum.mtu"), String(result.network.mtu)],
+		[t("sum.account"), result.warp.accountType + (result.warp.warpPlus ? " (WARP+)" : "")],
+		[t("sum.obf"), pickText(obf, "profileLabel")],
 	]
+
+	if (obf.signatures?.length) {
+		const names = obf.signatures.map((s) => s.id.toUpperCase()).join(", ")
+		rows.push([t("sum.mimicry"), obf.mimicryDomain ? `${names} → ${obf.mimicryDomain}` : names])
+	}
+	rows.push([t("sum.seed"), result.meta.seed])
 
 	if (result.location?.measured) {
 		rows.splice(1, 0, [
-			"Exit",
+			t("sum.exit"),
 			`${result.location.city}, ${result.location.country} (${result.location.colo}, ${result.location.rttMs} ms)`,
 		])
 	} else if (result.location && !result.location.measured) {
-		rows.splice(1, 0, ["Exit", "could not be measured"])
+		rows.splice(1, 0, [t("sum.exit"), t("sum.exitUnknown")])
 	}
 
 	for (const [key, value] of rows) {
@@ -498,6 +902,9 @@ function renderSummary(result) {
 // ------------------------------------------------------------------ events
 
 function wire() {
+	$("langRu").addEventListener("click", () => setLanguage("ru"))
+	$("langEn").addEventListener("click", () => setLanguage("en"))
+
 	$("generateBtn").addEventListener("click", generate)
 	$("scanBtn").addEventListener("click", runScan)
 
@@ -508,6 +915,7 @@ function wire() {
 
 	$("seed").addEventListener("change", () => refreshObfuscation())
 	$("allowedIps").addEventListener("change", updateAllowedHint)
+	$("mimicryDomainCustom").addEventListener("change", () => refreshObfuscation())
 
 	for (const tab of document.querySelectorAll(".tab")) {
 		tab.addEventListener("click", () => {
@@ -524,9 +932,9 @@ function wire() {
 		const { content } = state.result.configs[state.tab]
 		try {
 			await navigator.clipboard.writeText(content)
-			toast("Copied to clipboard")
+			toast(t("out.copied"))
 		} catch {
-			toast("Clipboard blocked - select the text manually", "error")
+			toast(t("out.copyFail"), "error")
 		}
 	})
 
@@ -540,7 +948,7 @@ function wire() {
 		a.download = filename
 		a.click()
 		URL.revokeObjectURL(url)
-		toast(`Downloaded ${filename}`)
+		toast(t("out.downloaded", { name: filename }))
 	})
 }
 

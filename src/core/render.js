@@ -32,6 +32,20 @@ function header(profile, flavor) {
 	if (obfuscation?.enabled) {
 		lines.push(`# Obfuscation: ${obfuscation.profileLabel} (AmneziaWG ${obfuscation.version})`)
 	}
+	if (obfuscation?.compat === "awg") {
+		// The single most expensive mistake this tool can let you make: these
+		// parameters import cleanly, show no error, and never complete a handshake
+		// against Cloudflare, because WARP servers run stock WireGuard.
+		lines.push("#")
+		lines.push("# !!! THIS PROFILE WILL NOT CONNECT TO CLOUDFLARE WARP !!!")
+		lines.push("# S1/S2 padding, H1-H4 magic headers and I1-I5 fake packets are")
+		lines.push("# AmneziaWG extensions. Cloudflare speaks stock WireGuard and will")
+		lines.push("# silently drop the handshake. Point this config at your own")
+		lines.push("# AmneziaWG server, or pick a warp-* profile instead.")
+	} else if (obfuscation?.enabled) {
+		lines.push("# WARP-compatible: only junk packets (Jc/Jmin/Jmax) are used, which")
+		lines.push("# stock WireGuard ignores. No S1/S2 or H1-H4, so the handshake works.")
+	}
 	if (meta.mock) {
 		lines.push("#")
 		lines.push("# !!! MOCK MODE !!! These credentials are synthetic and will NOT connect.")
@@ -80,7 +94,10 @@ export function renderAmneziaWG(profile) {
 		lines.push("")
 		lines.push(`# Cloudflare client_id = ${warp.reserved.base64}`)
 		lines.push(`# Reserved bytes = [${warp.reserved.bytes.join(", ")}]`)
-		lines.push("# Only needed by sing-box / v2ray WireGuard outbounds, not by AmneziaWG.")
+		lines.push("# Normally only needed by sing-box / v2ray WireGuard outbounds.")
+		lines.push("# AmneziaWG can also fold these bytes into H1-H4 so the packet header")
+		lines.push("# stops being a constant 01/02/03/04 while staying valid for Cloudflare")
+		lines.push("# (enable with --client-id-headers).")
 	}
 
 	return join(lines)

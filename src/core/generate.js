@@ -7,7 +7,16 @@
 import { resolveKeyPair, generatePresharedKey } from "./keys.js"
 import { makeSeed } from "./rand.js"
 import { buildEndpoint, describeColo, probeColo } from "./endpoints.js"
-import { generateObfuscation, validateObfuscation, PROFILES } from "./amnezia.js"
+import {
+	generateObfuscation,
+	validateObfuscation,
+	PROFILES,
+	PACKET_SIGNATURES,
+	MIMICRY_DOMAINS,
+	DEFAULT_MIMICRY_DOMAIN,
+	DEFAULT_PROFILE,
+	COMPAT,
+} from "./amnezia.js"
 import { calculateMtu, ALLOWED_IPS_PRESETS, DNS_PRESETS } from "./mtu.js"
 import {
 	registerDevice,
@@ -213,11 +222,17 @@ export async function generateProfile(options = {}) {
 	}
 
 	// 5. Obfuscation -----------------------------------------------------------
+	// `reserved` is passed so that H1-H4 can be derived from the WARP client_id
+	// instead of being random - the only form of header obfuscation Cloudflare
+	// will still accept. See deriveWarpHeaders() in amnezia.js.
 	const obfuscation = generateObfuscation({
-		profile: options.obfuscation ?? "balanced",
+		profile: options.obfuscation ?? DEFAULT_PROFILE,
 		seed: `${seed}:obfuscation`,
 		overrides: options.obfuscationOverrides,
 		signatures: options.signatures,
+		mimicryDomain: options.mimicryDomain,
+		reserved: warp.reserved?.bytes,
+		useClientIdHeaders: options.useClientIdHeaders === true,
 	})
 	if (!obfuscation.validation.valid) {
 		throw new GenerateError(
@@ -278,6 +293,17 @@ export async function generateProfile(options = {}) {
 function collectWarnings(profile) {
 	const warnings = [...(profile.obfuscation.validation?.warnings ?? [])]
 
+	// The single most valuable warning in the whole tool: an "awg" profile
+	// against a Cloudflare endpoint imports fine and then never connects.
+	if (profile.obfuscation.compat === "awg") {
+		warnings.unshift(
+			"This obfuscation profile requires your OWN AmneziaWG server. The Cloudflare " +
+				"endpoint in this config runs stock WireGuard and will silently ignore the " +
+				"handshake, so the tunnel will never come up. Pick a WARP-compatible profile " +
+				"instead, or point Endpoint at your own server.",
+		)
+	}
+
 	if (profile.meta.mock) {
 		warnings.unshift(
 			"MOCK MODE is on. This config contains synthetic credentials and will not connect.",
@@ -318,9 +344,25 @@ export function describeOptions() {
 		obfuscationProfiles: Object.entries(PROFILES).map(([id, p]) => ({
 			id,
 			label: p.label,
+			labelRu: p.labelRu,
 			summary: p.summary,
+			summaryRu: p.summaryRu,
 			obfuscated: p.obfuscated,
+			compat: p.compat,
 			version: p.version ?? "1.0",
+			worksWithWarp: p.compat === "warp",
+		})),
+		defaultProfile: DEFAULT_PROFILE,
+		compat: Object.values(COMPAT),
+		mimicryDomains: MIMICRY_DOMAINS,
+		defaultMimicryDomain: DEFAULT_MIMICRY_DOMAIN,
+		signatures: Object.entries(PACKET_SIGNATURES).map(([id, s]) => ({
+			id,
+			label: s.label,
+			labelRu: s.labelRu,
+			description: s.description,
+			descriptionRu: s.descriptionRu,
+			usesDomain: Boolean(s.usesDomain),
 		})),
 		allowedIps: Object.entries(ALLOWED_IPS_PRESETS).map(([id, p]) => ({
 			id,

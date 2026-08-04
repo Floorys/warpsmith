@@ -162,11 +162,6 @@ const routes = {
 		endpointPorts: ENDPOINT_PORTS,
 		camouflagePorts: CAMOUFLAGE_PORTS,
 		pathMtuPresets: PATH_PRESETS,
-		signatures: Object.entries(PACKET_SIGNATURES).map(([id, s]) => ({
-			id,
-			label: s.label,
-			description: s.description,
-		})),
 		limits: LIMITS,
 		locationReality: describeLocationReality(),
 		mock: isMockMode(),
@@ -175,16 +170,22 @@ const routes = {
 	// Live preview of obfuscation parameters. Cheap: no Cloudflare call at all,
 	// so the UI can re-roll parameters instantly while the user experiments.
 	"POST /api/obfuscation": async (body) => {
-		const result = generateObfuscation({
-			profile: body.profile ?? "balanced",
+		return generateObfuscation({
+			profile: body.profile,
 			seed: body.seed,
 			overrides: body.overrides,
 			signatures: body.signatures,
+			mimicryDomain: body.mimicryDomain,
+			reserved: body.reserved,
+			useClientIdHeaders: body.useClientIdHeaders === true,
 		})
-		return result
 	},
 
-	"POST /api/validate": async (body) => validateObfuscation(body.params ?? body),
+	"POST /api/validate": async (body) =>
+		validateObfuscation(body.params ?? body, {
+			compat: body.compat,
+			headersFromClientId: body.headersFromClientId === true,
+		}),
 
 	"POST /api/mtu": async (body) =>
 		calculateMtu({
@@ -217,6 +218,8 @@ const routes = {
 			obfuscation: body.obfuscation,
 			obfuscationOverrides: body.obfuscationOverrides,
 			signatures: body.signatures,
+			mimicryDomain: body.mimicryDomain,
+			useClientIdHeaders: body.useClientIdHeaders,
 			endpointPrefix: body.endpointPrefix,
 			endpointPort: body.endpointPort,
 			endpointHost: body.endpointHost,

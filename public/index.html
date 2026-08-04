@@ -1,12 +1,12 @@
 <!doctype html>
-<html lang="en">
+<html lang="ru">
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>AWG WARP Architect</title>
 		<meta
 			name="description"
-			content="Cloudflare WARP config generator with measured location picking and AmneziaWG obfuscation."
+			content="Генератор конфигов Cloudflare WARP с измеряемым выбором локации и обфускацией AmneziaWG."
 		/>
 		<link rel="stylesheet" href="/styles.css" />
 		<link
@@ -26,12 +26,16 @@
 					</span>
 					<span>
 						<strong>WARP Architect</strong>
-						<em>WARP + AmneziaWG config builder</em>
+						<em data-i18n="brand.sub">Сборщик конфигов WARP + AmneziaWG</em>
 					</span>
 				</div>
 				<div class="topbar__meta">
-					<span id="mockBadge" class="pill pill--warn" hidden>Mock mode</span>
-					<span id="healthBadge" class="pill pill--muted">Connecting…</span>
+					<div class="lang" role="group" aria-label="Language">
+						<button type="button" class="lang__btn is-active" id="langRu">RU</button>
+						<button type="button" class="lang__btn" id="langEn">EN</button>
+					</div>
+					<span id="mockBadge" class="pill pill--warn" hidden data-i18n="badge.mock">Тестовый режим</span>
+					<span id="healthBadge" class="pill pill--muted" data-i18n="badge.connecting">Подключение…</span>
 				</div>
 			</div>
 		</header>
@@ -41,20 +45,16 @@
 			<div class="controls">
 				<section class="card">
 					<div class="card__head">
-						<h2>Location</h2>
-						<button
-							class="btn btn--ghost btn--sm"
-							id="scanBtn"
-							type="button"
-						>
-							Scan datacenters
+						<h2 data-i18n="loc.title">Локация</h2>
+						<button class="btn btn--ghost btn--sm" id="scanBtn" type="button" data-i18n="loc.scan">
+							Сканировать дата-центры
 						</button>
 					</div>
 
 					<div class="note note--info" id="localityNote">
 						<p id="localitySummary"></p>
 						<details>
-							<summary>Why there is no country dropdown</summary>
+							<summary data-i18n="loc.why">Почему нет выпадающего списка стран</summary>
 							<ul id="localityDetails"></ul>
 						</details>
 					</div>
@@ -66,80 +66,111 @@
 
 					<div class="grid grid--2">
 						<label class="field">
-							<span class="field__label">Endpoint prefix</span>
+							<span class="field__label" data-i18n="loc.prefix">Префикс endpoint</span>
 							<select id="endpointPrefix"></select>
 							<span class="field__hint" id="prefixHint"></span>
 						</label>
 
 						<label class="field">
-							<span class="field__label">UDP port</span>
+							<span class="field__label" data-i18n="loc.port">UDP-порт</span>
 							<select id="endpointPort"></select>
 							<span class="field__hint" id="portHint"></span>
 						</label>
 					</div>
 
 					<label class="field">
-						<span class="field__label">Pin an exact endpoint <span class="field__opt">optional</span></span>
-						<input
-							id="endpointHost"
-							type="text"
-							placeholder="162.159.193.10:2408"
-							autocomplete="off"
-							spellcheck="false"
-						/>
-						<span class="field__hint">Overrides the prefix and port above.</span>
+						<span class="field__label">
+							<span data-i18n="loc.pin">Закрепить точный endpoint</span>
+							<span class="field__opt" data-i18n="common.optional">необязательно</span>
+						</span>
+						<input id="endpointHost" type="text" placeholder="162.159.193.10:2408" autocomplete="off" spellcheck="false" />
+						<span class="field__hint" data-i18n="loc.pinHint">Переопределяет префикс и порт выше.</span>
 					</label>
 
 					<label class="check">
 						<input type="checkbox" id="detectLocation" checked />
 						<span>
-							Measure the real exit datacenter after generating
-							<em>Adds about a second, tells you where you actually come out.</em>
+							<span data-i18n="loc.measure">Измерить реальный дата-центр выхода после генерации</span>
+							<em data-i18n="loc.measureHint">Добавляет около секунды, зато показывает, где вы реально выходите.</em>
 						</span>
 					</label>
 				</section>
 
 				<section class="card">
 					<div class="card__head">
-						<h2>Obfuscation</h2>
-						<button class="btn btn--ghost btn--sm" id="rerollBtn" type="button">
-							Re-roll values
+						<h2 data-i18n="obf.title">Обфускация</h2>
+						<button class="btn btn--ghost btn--sm" id="rerollBtn" type="button" data-i18n="obf.reroll">
+							Перегенерировать
 						</button>
+					</div>
+
+					<div class="note note--warn" id="compatNote" hidden>
+						<p id="compatNoteText"></p>
 					</div>
 
 					<div class="profiles" id="profiles" role="radiogroup" aria-label="Obfuscation profile"></div>
 
+					<!-- ---------------------- PROTOCOL MIMICRY ---------------------- -->
+					<div class="mimicry" id="mimicryWrap" hidden>
+						<div class="params__head">
+							<h3 data-i18n="mim.title">Под какой протокол маскироваться</h3>
+							<span class="pill pill--muted">AWG 1.5</span>
+						</div>
+						<p class="field__hint" data-i18n="mim.intro">
+							Первые пакеты туннеля будут выглядеть как выбранный протокол. Выберите до пяти.
+						</p>
+
+						<div class="sigs" id="mimicrySignatures"></div>
+
+						<div class="grid grid--2">
+							<label class="field">
+								<span class="field__label" data-i18n="mim.domain">Домен для подстановки (SNI)</span>
+								<select id="mimicryDomain"></select>
+								<span class="field__hint" id="mimicryDomainHint"></span>
+							</label>
+
+							<label class="field">
+								<span class="field__label">
+									<span data-i18n="mim.custom">Свой домен</span>
+									<span class="field__opt" data-i18n="common.optional">необязательно</span>
+								</span>
+								<input id="mimicryDomainCustom" type="text" placeholder="example.com" spellcheck="false" autocomplete="off" />
+								<span class="field__hint" data-i18n="mim.customHint">Перебивает выбор слева.</span>
+							</label>
+						</div>
+					</div>
+
 					<div class="params" id="paramsPanel">
 						<div class="params__head">
-							<h3>Generated parameters</h3>
+							<h3 data-i18n="obf.params">Сгенерированные параметры</h3>
 							<span class="pill pill--muted" id="awgVersion"></span>
 						</div>
 						<dl class="params__list" id="paramsList"></dl>
 					</div>
 
 					<details class="advanced" id="advancedWrap">
-						<summary>Edit parameters by hand</summary>
-						<p class="advanced__warn">
-							Every peer must use identical values. Constraints are enforced live:
-							<code>Jmin &lt; Jmax</code>, <code>S1 + 56 ≠ S2</code>, and H1–H4 must all differ.
-						</p>
+						<summary data-i18n="obf.manual">Править параметры вручную</summary>
+						<p class="advanced__warn" id="advancedWarn"></p>
 						<div class="grid grid--3" id="overrideGrid"></div>
 						<div class="validation" id="validation"></div>
 					</details>
 
 					<label class="field">
-						<span class="field__label">Seed <span class="field__opt">reproduces a profile</span></span>
-						<input id="seed" type="text" placeholder="leave empty for a new one" spellcheck="false" autocomplete="off" />
-						<span class="field__hint">Paste a previous seed to rebuild the exact same obfuscation on another device.</span>
+						<span class="field__label">
+							<span data-i18n="obf.seed">Seed</span>
+							<span class="field__opt" data-i18n="obf.seedOpt">воспроизводит профиль</span>
+						</span>
+						<input id="seed" type="text" data-i18n-ph="obf.seedPh" placeholder="оставьте пустым для нового" spellcheck="false" autocomplete="off" />
+						<span class="field__hint" data-i18n="obf.seedHint">Вставьте прошлый seed, чтобы получить точно такую же обфускацию на другом устройстве.</span>
 					</label>
 				</section>
 
 				<section class="card">
-					<div class="card__head"><h2>Network</h2></div>
+					<div class="card__head"><h2 data-i18n="net.title">Сеть</h2></div>
 
 					<div class="grid grid--2">
 						<label class="field">
-							<span class="field__label">Routing</span>
+							<span class="field__label" data-i18n="net.routing">Маршрутизация</span>
 							<select id="allowedIps"></select>
 							<span class="field__hint" id="allowedHint"></span>
 						</label>
@@ -150,47 +181,59 @@
 						</label>
 
 						<label class="field">
-							<span class="field__label">Link MTU</span>
+							<span class="field__label" data-i18n="net.mtu">MTU канала</span>
 							<select id="pathMtu"></select>
 							<span class="field__hint" id="mtuHint"></span>
 						</label>
 
 						<label class="field">
-							<span class="field__label">Keepalive (seconds)</span>
+							<span class="field__label" data-i18n="net.keepalive">Keepalive (секунды)</span>
 							<input id="keepalive" type="number" min="0" max="600" value="25" />
-							<span class="field__hint">0 disables. 25 keeps NAT open on mobile.</span>
+							<span class="field__hint" data-i18n="net.keepaliveHint">0 отключает. 25 держит NAT открытым на мобильном.</span>
 						</label>
 					</div>
 
 					<label class="check">
 						<input type="checkbox" id="ipv6" checked />
-						<span>Include IPv6 <em>Turn off if your ISP's IPv6 is broken or leaks.</em></span>
+						<span>
+							<span data-i18n="net.ipv6">Включить IPv6</span>
+							<em data-i18n="net.ipv6Hint">Выключите, если у провайдера IPv6 сломан или течёт.</em>
+						</span>
 					</label>
 					<label class="check">
 						<input type="checkbox" id="presharedKey" />
-						<span>Add a pre-shared key <em>Extra symmetric layer. Optional for WARP.</em></span>
+						<span>
+							<span data-i18n="net.psk">Добавить pre-shared key</span>
+							<em data-i18n="net.pskHint">Дополнительный симметричный слой. Для WARP необязателен.</em>
+						</span>
 					</label>
 				</section>
 
 				<section class="card">
-					<div class="card__head"><h2>Identity</h2></div>
+					<div class="card__head"><h2 data-i18n="id.title">Идентичность</h2></div>
 					<label class="field">
-						<span class="field__label">Existing private key <span class="field__opt">optional</span></span>
-						<input id="privateKey" type="text" placeholder="base64, 44 characters" spellcheck="false" autocomplete="off" />
-						<span class="field__hint">Reuse a key to regenerate a config without changing your identity.</span>
+						<span class="field__label">
+							<span data-i18n="id.privateKey">Существующий приватный ключ</span>
+							<span class="field__opt" data-i18n="common.optional">необязательно</span>
+						</span>
+						<input id="privateKey" type="text" data-i18n-ph="id.privateKeyPh" placeholder="base64, 44 символа" spellcheck="false" autocomplete="off" />
+						<span class="field__hint" data-i18n="id.privateKeyHint">Переиспользуйте ключ, чтобы пересобрать конфиг, не меняя идентичность.</span>
 					</label>
 					<label class="field">
-						<span class="field__label">WARP+ license <span class="field__opt">optional</span></span>
+						<span class="field__label">
+							<span data-i18n="id.license">Лицензия WARP+</span>
+							<span class="field__opt" data-i18n="common.optional">необязательно</span>
+						</span>
 						<input id="license" type="text" placeholder="xxxxxxxx-xxxxxxxx-xxxxxxxx" spellcheck="false" autocomplete="off" />
 					</label>
 				</section>
 
 				<div class="actions">
-					<button class="btn btn--primary btn--lg" id="generateBtn" type="button">
-						Generate config
+					<button class="btn btn--primary btn--lg" id="generateBtn" type="button" data-i18n="action.generate">
+						Сгенерировать конфиг
 					</button>
-					<p class="actions__hint">
-						Registers a fresh device with Cloudflare, then builds the config. Keys never leave this server's memory.
+					<p class="actions__hint" data-i18n="action.hint">
+						Регистрирует новое устройство в Cloudflare и собирает конфиг. Ключи не покидают память сервера.
 					</p>
 				</div>
 			</div>
@@ -212,22 +255,22 @@
 									<path d="M15 17h18M15 24h18M15 31h11" stroke-linecap="round" />
 								</svg>
 							</div>
-							<h3>No config yet</h3>
-							<p>Pick your settings, then press <strong>Generate config</strong>.</p>
+							<h3 data-i18n="out.empty">Конфига пока нет</h3>
+							<p data-i18n="out.emptyHint">Выберите настройки и нажмите «Сгенерировать конфиг».</p>
 						</div>
 
 						<pre class="code" id="configOut" hidden><code></code></pre>
 					</div>
 
 					<div class="output__foot" id="outputFoot" hidden>
-						<button class="btn btn--ghost btn--sm" id="copyBtn" type="button">Copy</button>
-						<button class="btn btn--ghost btn--sm" id="downloadBtn" type="button">Download</button>
+						<button class="btn btn--ghost btn--sm" id="copyBtn" type="button" data-i18n="out.copy">Копировать</button>
+						<button class="btn btn--ghost btn--sm" id="downloadBtn" type="button" data-i18n="out.download">Скачать</button>
 						<span class="output__file" id="fileName"></span>
 					</div>
 				</div>
 
 				<div class="card summary" id="summaryCard" hidden>
-					<h3>Result</h3>
+					<h3 data-i18n="out.result">Результат</h3>
 					<dl class="summary__list" id="summaryList"></dl>
 					<div id="warnList"></div>
 				</div>
@@ -237,9 +280,9 @@
 		<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
 		<footer class="shell footer">
-			<p>
-				Self-hosted. Configs are generated on request and never stored on disk.
-				Keep your <code>PrivateKey</code> secret.
+			<p data-i18n="footer">
+				Самостоятельный хостинг. Конфиги создаются по запросу и не сохраняются на диск.
+				Держите PrivateKey в секрете.
 			</p>
 		</footer>
 

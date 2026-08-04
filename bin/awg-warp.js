@@ -3,9 +3,9 @@
  * CLI front end. Same core as the web UI, so scripted and interactive use can
  * never drift apart.
  *
- *   awg-warp generate --obfuscation paranoid --out ./awg.conf
+ *   awg-warp generate --obfuscation warp-heavy --out ./awg.conf
  *   awg-warp scan
- *   awg-warp obfuscate --obfuscation mimicry
+ *   awg-warp obfuscate --obfuscation awg-mimicry
  */
 
 import fs from "node:fs/promises"
@@ -13,7 +13,11 @@ import path from "node:path"
 
 import { generateProfile, describeOptions } from "../src/core/generate.js"
 import { scanLocations, describeLocationReality } from "../src/core/endpoints.js"
-import { generateObfuscation, renderObfuscationLines } from "../src/core/amnezia.js"
+import {
+	generateObfuscation,
+	renderObfuscationLines,
+	PACKET_SIGNATURES,
+} from "../src/core/amnezia.js"
 import { isMockMode } from "../src/core/warp.js"
 
 const COLORS = process.stdout.isTTY && !process.env.NO_COLOR
@@ -51,6 +55,25 @@ function parseArgs(argv) {
 	return out
 }
 
+/** `--signatures tls,quic` -> ["tls", "quic"]. Unknown ids fail loudly. */
+function parseSignatures(value) {
+	if (!value || value === true) return undefined
+	const ids = String(value)
+		.split(",")
+		.map((s) => s.trim().toLowerCase())
+		.filter(Boolean)
+	if (!ids.length) return undefined
+
+	const known = Object.keys(PACKET_SIGNATURES)
+	const unknown = ids.filter((id) => !known.includes(id))
+	if (unknown.length) {
+		throw new Error(
+			`Unknown signature(s): ${unknown.join(", ")}. Available: ${known.join(", ")}`,
+		)
+	}
+	return ids
+}
+
 function usage() {
 	const { obfuscationProfiles, allowedIps, dns } = describeOptions()
 	console.log(`
@@ -63,7 +86,7 @@ ${c.bold("COMMANDS")}
   serve               Start the web UI (same as npm start)
 
 ${c.bold("GENERATE OPTIONS")}
-  --obfuscation <id>  ${obfuscationProfiles.map((p) => p.id).join(" | ")}   (default: balanced)
+  --obfuscation <id>  ${obfuscationProfiles.map((p) => p.id).join(" | ")}   (default: warp-balanced)
   --out <file>        Write the AmneziaWG config here (default: stdout)
   --format <fmt>      awg | wg | json          (default: awg)
   --seed <hex>        Reproduce a previous profile exactly
@@ -81,12 +104,17 @@ ${c.bold("GENERATE OPTIONS")}
   --no-ipv6           Strip IPv6 addresses and routes
   --preshared-key     Add an extra symmetric PSK
 
+${c.bold("MIMICRY OPTIONS")}  ${c.dim("(awg-mimicry profile, own AmneziaWG server only)")}
+  --signatures <ids>  Comma separated: ${Object.keys(PACKET_SIGNATURES).join(",")}
+  --mimicry-domain <d> Domain to imitate, e.g. github.com or vk.com
+  --client-id-headers  Derive H1-H4 from the Cloudflare client_id (WARP-safe)
+
 ${c.bold("EXAMPLES")}
   ${c.dim("# Everyday config")}
   awg-warp generate --out warp.conf
 
   ${c.dim("# Heavy obfuscation, pinned to a port that looks like IPsec")}
-  awg-warp generate --obfuscation paranoid --port 4500 --out warp.conf
+  awg-warp generate --obfuscation warp-heavy --port 4500 --out warp.conf
 
   ${c.dim("# Find the closest datacenter first, then pin to it")}
   awg-warp scan
@@ -94,6 +122,11 @@ ${c.bold("EXAMPLES")}
 
   ${c.dim("# Same obfuscation parameters on a second device")}
   awg-warp generate --seed 4f2a9c1b7e0d3a55 --out phone.conf
+
+  ${c.dim("# Make the tunnel start like an HTTPS session to github.com")}
+  ${c.dim("# (requires your own AmneziaWG server, not Cloudflare WARP)")}
+  awg-warp generate --obfuscation awg-mimicry --signatures tls,quic \\
+    --mimicry-domain github.com --out home.conf
 
   ${c.dim("# Offline dry run, no Cloudflare contact")}
   MOCK_WARP=1 awg-warp generate
@@ -103,6 +136,9 @@ ${c.bold("EXAMPLES")}
 async function cmdGenerate(args) {
 	const profile = await generateProfile({
 		obfuscation: args.obfuscation,
+		signatures: parseSignatures(args.signatures),
+		mimicryDomain: args["mimicry-domain"],
+		useClientIdHeaders: Boolean(args["client-id-headers"]),
 		seed: args.seed,
 		privateKey: args["private-key"],
 		license: args.license,
@@ -189,7 +225,7 @@ async function cmdScan(args) {
 
 async function cmdObfuscate(args) {
 	const result = generateObfuscation({
-		profile: args.obfuscation || args.profile || "balanced",
+		profile: args.obfuscation || args.profile || "warp-balanced",
 		seed: args.seed,
 	})
 	if (!result.enabled) {
