@@ -1,0 +1,38 @@
+{
+  "name": "awg-warp-architect",
+  "version": "1.0.0",
+  "description": "WARP config generator with location picking and AmneziaWG obfuscation engine. Web UI + REST API + CLI. Zero dependencies.",
+  "type": "module",
+  "main": "src/index.js",
+  "bin": {
+    "awg-warp": "bin/awg-warp.js"
+  },
+  "engines": {
+    "node": ">=18.17.0"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "cli": "node bin/awg-warp.js",
+    "test": "node --test test/",
+    "smoke": "MOCK_WARP=1 node test/smoke.mjs"
+  },
+  "keywords": [
+    "warp",
+    "cloudflare-warp",
+    "wireguard",
+    "amneziawg",
+    "awg",
+    "obfuscation",
+    "dpi",
+    "config-generator"
+  ],
+  "license": "MIT",
+  "dependencies": {},
+  "files": [
+    "src",
+    "public",
+    "bin",
+    "README.md"
+  ]
+}

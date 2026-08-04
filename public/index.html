@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>AWG WARP Architect</title>
+		<meta
+			name="description"
+			content="Cloudflare WARP config generator with measured location picking and AmneziaWG obfuscation."
+		/>
+		<link rel="stylesheet" href="/styles.css" />
+		<link
+			rel="icon"
+			href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232783DE'/%3E%3Cpath d='M9 20l5-9 4 6 2-3 3 6z' fill='white'/%3E%3C/svg%3E"
+		/>
+	</head>
+	<body>
+		<header class="topbar">
+			<div class="shell topbar__inner">
+				<div class="brand">
+					<span class="brand__mark" aria-hidden="true">
+						<svg viewBox="0 0 32 32" width="28" height="28">
+							<rect width="32" height="32" rx="7" fill="currentColor" />
+							<path d="M8 21l5.5-10L18 18l2.2-3.4L25 21z" fill="#fff" />
+						</svg>
+					</span>
+					<span>
+						<strong>WARP Architect</strong>
+						<em>WARP + AmneziaWG config builder</em>
+					</span>
+				</div>
+				<div class="topbar__meta">
+					<span id="mockBadge" class="pill pill--warn" hidden>Mock mode</span>
+					<span id="healthBadge" class="pill pill--muted">Connecting…</span>
+				</div>
+			</div>
+		</header>
+
+		<main class="shell layout">
+			<!-- ------------------------------ CONTROLS ------------------------------ -->
+			<div class="controls">
+				<section class="card">
+					<div class="card__head">
+						<h2>Location</h2>
+						<button
+							class="btn btn--ghost btn--sm"
+							id="scanBtn"
+							type="button"
+						>
+							Scan datacenters
+						</button>
+					</div>
+
+					<div class="note note--info" id="localityNote">
+						<p id="localitySummary"></p>
+						<details>
+							<summary>Why there is no country dropdown</summary>
+							<ul id="localityDetails"></ul>
+						</details>
+					</div>
+
+					<div id="scanPanel" hidden>
+						<div class="scan__status" id="scanStatus"></div>
+						<div class="scan__list" id="scanList"></div>
+					</div>
+
+					<div class="grid grid--2">
+						<label class="field">
+							<span class="field__label">Endpoint prefix</span>
+							<select id="endpointPrefix"></select>
+							<span class="field__hint" id="prefixHint"></span>
+						</label>
+
+						<label class="field">
+							<span class="field__label">UDP port</span>
+							<select id="endpointPort"></select>
+							<span class="field__hint" id="portHint"></span>
+						</label>
+					</div>
+
+					<label class="field">
+						<span class="field__label">Pin an exact endpoint <span class="field__opt">optional</span></span>
+						<input
+							id="endpointHost"
+							type="text"
+							placeholder="162.159.193.10:2408"
+							autocomplete="off"
+							spellcheck="false"
+						/>
+						<span class="field__hint">Overrides the prefix and port above.</span>
+					</label>
+
+					<label class="check">
+						<input type="checkbox" id="detectLocation" checked />
+						<span>
+							Measure the real exit datacenter after generating
+							<em>Adds about a second, tells you where you actually come out.</em>
+						</span>
+					</label>
+				</section>
+
+				<section class="card">
+					<div class="card__head">
+						<h2>Obfuscation</h2>
+						<button class="btn btn--ghost btn--sm" id="rerollBtn" type="button">
+							Re-roll values
+						</button>
+					</div>
+
+					<div class="profiles" id="profiles" role="radiogroup" aria-label="Obfuscation profile"></div>
+
+					<div class="params" id="paramsPanel">
+						<div class="params__head">
+							<h3>Generated parameters</h3>
+							<span class="pill pill--muted" id="awgVersion"></span>
+						</div>
+						<dl class="params__list" id="paramsList"></dl>
+					</div>
+
+					<details class="advanced" id="advancedWrap">
+						<summary>Edit parameters by hand</summary>
+						<p class="advanced__warn">
+							Every peer must use identical values. Constraints are enforced live:
+							<code>Jmin &lt; Jmax</code>, <code>S1 + 56 ≠ S2</code>, and H1–H4 must all differ.
+						</p>
+						<div class="grid grid--3" id="overrideGrid"></div>
+						<div class="validation" id="validation"></div>
+					</details>
+
+					<label class="field">
+						<span class="field__label">Seed <span class="field__opt">reproduces a profile</span></span>
+						<input id="seed" type="text" placeholder="leave empty for a new one" spellcheck="false" autocomplete="off" />
+						<span class="field__hint">Paste a previous seed to rebuild the exact same obfuscation on another device.</span>
+					</label>
+				</section>
+
+				<section class="card">
+					<div class="card__head"><h2>Network</h2></div>
+
+					<div class="grid grid--2">
+						<label class="field">
+							<span class="field__label">Routing</span>
+							<select id="allowedIps"></select>
+							<span class="field__hint" id="allowedHint"></span>
+						</label>
+
+						<label class="field">
+							<span class="field__label">DNS</span>
+							<select id="dns"></select>
+						</label>
+
+						<label class="field">
+							<span class="field__label">Link MTU</span>
+							<select id="pathMtu"></select>
+							<span class="field__hint" id="mtuHint"></span>
+						</label>
+
+						<label class="field">
+							<span class="field__label">Keepalive (seconds)</span>
+							<input id="keepalive" type="number" min="0" max="600" value="25" />
+							<span class="field__hint">0 disables. 25 keeps NAT open on mobile.</span>
+						</label>
+					</div>
+
+					<label class="check">
+						<input type="checkbox" id="ipv6" checked />
+						<span>Include IPv6 <em>Turn off if your ISP's IPv6 is broken or leaks.</em></span>
+					</label>
+					<label class="check">
+						<input type="checkbox" id="presharedKey" />
+						<span>Add a pre-shared key <em>Extra symmetric layer. Optional for WARP.</em></span>
+					</label>
+				</section>
+
+				<section class="card">
+					<div class="card__head"><h2>Identity</h2></div>
+					<label class="field">
+						<span class="field__label">Existing private key <span class="field__opt">optional</span></span>
+						<input id="privateKey" type="text" placeholder="base64, 44 characters" spellcheck="false" autocomplete="off" />
+						<span class="field__hint">Reuse a key to regenerate a config without changing your identity.</span>
+					</label>
+					<label class="field">
+						<span class="field__label">WARP+ license <span class="field__opt">optional</span></span>
+						<input id="license" type="text" placeholder="xxxxxxxx-xxxxxxxx-xxxxxxxx" spellcheck="false" autocomplete="off" />
+					</label>
+				</section>
+
+				<div class="actions">
+					<button class="btn btn--primary btn--lg" id="generateBtn" type="button">
+						Generate config
+					</button>
+					<p class="actions__hint">
+						Registers a fresh device with Cloudflare, then builds the config. Keys never leave this server's memory.
+					</p>
+				</div>
+			</div>
+
+			<!-- ------------------------------- OUTPUT ------------------------------- -->
+			<aside class="output">
+				<div class="card card--output">
+					<div class="tabs" role="tablist">
+						<button class="tab is-active" data-tab="amneziawg" role="tab">AmneziaWG</button>
+						<button class="tab" data-tab="wireguard" role="tab">WireGuard</button>
+						<button class="tab" data-tab="json" role="tab">JSON</button>
+					</div>
+
+					<div class="output__body">
+						<div class="empty" id="emptyState">
+							<div class="empty__icon" aria-hidden="true">
+								<svg viewBox="0 0 48 48" width="44" height="44" fill="none" stroke="currentColor" stroke-width="1.6">
+									<rect x="8" y="6" width="32" height="36" rx="4" />
+									<path d="M15 17h18M15 24h18M15 31h11" stroke-linecap="round" />
+								</svg>
+							</div>
+							<h3>No config yet</h3>
+							<p>Pick your settings, then press <strong>Generate config</strong>.</p>
+						</div>
+
+						<pre class="code" id="configOut" hidden><code></code></pre>
+					</div>
+
+					<div class="output__foot" id="outputFoot" hidden>
+						<button class="btn btn--ghost btn--sm" id="copyBtn" type="button">Copy</button>
+						<button class="btn btn--ghost btn--sm" id="downloadBtn" type="button">Download</button>
+						<span class="output__file" id="fileName"></span>
+					</div>
+				</div>
+
+				<div class="card summary" id="summaryCard" hidden>
+					<h3>Result</h3>
+					<dl class="summary__list" id="summaryList"></dl>
+					<div id="warnList"></div>
+				</div>
+			</aside>
+		</main>
+
+		<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+		<footer class="shell footer">
+			<p>
+				Self-hosted. Configs are generated on request and never stored on disk.
+				Keep your <code>PrivateKey</code> secret.
+			</p>
+		</footer>
+
+		<script src="/app.js" type="module"></script>
+	</body>
+</html>

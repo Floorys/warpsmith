@@ -1,0 +1,15 @@
+services:
+  awg-warp-architect:
+    build: .
+    image: awg-warp-architect
+    container_name: awg-warp-architect
+    restart: unless-stopped
+    ports:
+      - "8787:8787"
+    environment:
+      PORT: "8787"
+      HOST: "0.0.0.0"
+      # MOCK_WARP: "1"          # run without any outbound network
+      # CORS_ORIGIN: "https://example.com"
+      RATE_MAX_GENERATE: "10"
+      RATE_MAX_OTHER: "60"
