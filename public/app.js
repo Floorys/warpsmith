@@ -67,7 +67,7 @@ const I18N = {
 		"mim.domainUnused": "Выбранные протоколы не используют домен.",
 		"mim.needOne": "Выберите хотя бы один протокол.",
 		"net.title": "Сеть",
-		"net.routing": "Маршрутизация",
+		"net.routing": "��аршрутизация",
 		"net.mtu": "MTU канала",
 		"net.keepalive": "Keepalive (секунды)",
 		"net.keepaliveHint": "0 отключает. 25 держит NAT открытым на мобильном.",
@@ -672,6 +672,7 @@ async function refreshObfuscation(seed) {
 		renderParams(result)
 		fillOverrides(result)
 		renderValidation(result.validation)
+		afterParams()
 	} catch (error) {
 		toast(error.message, "error")
 	}
@@ -935,6 +936,7 @@ async function generate() {
 		$("seed").value = result.meta.seed
 		renderOutput()
 		renderSummary(result)
+		afterGenerate(result)
 		toast(t("out.generated"))
 	} catch (error) {
 		toast(error.hint ? `${error.message} - ${error.hint}` : error.message, "error")
@@ -1073,3 +1075,656 @@ function wire() {
 
 wire()
 init()
+
+// ==========================================================================
+// Sectioned shell: navigation, FAQ and history.
+//
+// This block is appended after wire()/init() on purpose. Everything here is
+// additive: it never rewrites the generator logic above, it only reads the
+// state that logic already produces.
+// ==========================================================================
+
+const EXTRA_I18N = {
+	ru: {
+		"nav.gen": "Генератор",
+		"nav.params": "Разбор параметров",
+		"nav.sim": "Симулятор пакетов",
+		"nav.hist": "История",
+		"nav.faq": "FAQ",
+		"side.note": "Ключи создаются на сервере по запросу и не пишутся на диск.",
+		"hero.title": "Чертёж конфига, а не кнопка «сгенерировать»",
+		"hero.lead":
+			"Каждое число в конфиге можно раскрыть: откуда взята граница, кто его читает и что сломается, если стороны разойдутся.",
+		"hero.warpTag": "работает с WARP",
+		"hero.warpDesc":
+			"Это обычный WireGuard. Допустим только junk-мусор Jc/Jmin/Jmax.",
+		"hero.awgTag": "только свой сервер",
+		"hero.awgDesc":
+			"S1/S2, H1–H4 и мимикрия под протокол. WARP такое рукопожатие отвергнет.",
+		"obf.explain": "Разобрать каждое число →",
+		"pdoc.title": "Разбор параметров",
+		"pdoc.lead":
+			"У каждого параметра: значение, кто его читает, откуда взята граница и что произойдёт, если на сервере он окажется другим.",
+		"pdoc.tagGen": "сгенерирован",
+		"pdoc.tagMan": "задан вручную",
+		"pdoc.tagOff": "выключен намеренно",
+		"pdoc.empty": "Параметры появятся, как только загрузится профиль обфускации.",
+		"pdoc.who": "Кто читает",
+		"pdoc.bound": "Откуда граница",
+		"pdoc.break": "Если разойдётся",
+		"sim.title": "Симулятор пакетов",
+		"sim.lead":
+			"Как выглядит начало сессии в проводе: сначала мусорные пакеты, потом настоящее рукопожатие, потом данные.",
+		"sim.wire": "Поток на проводе",
+		"sim.junk": "junk-мусор",
+		"sim.init": "handshake initiation",
+		"sim.resp": "handshake response",
+		"sim.data": "данные",
+		"sim.fp": "Отпечаток, от которого уходим",
+		"sim.fpHint":
+			"Чистый WireGuard: 148 байт, затем 92. Две фиксированные величины подряд — этого достаточно, чтобы опознать протокол по первым двум пакетам.",
+		"sim.noteJunk":
+			"Перед рукопожатием уходит {jc} мусорных пакетов по {jmin}–{jmax} байт. Для стороннего наблюдателя размеры перестают быть предсказуемыми, а WARP их молча отбрасывает: это отдельные UDP-датаграммы, а не часть рукопожатия.",
+		"sim.noteNoJunk":
+			"Junk-пакеты выключены (Jc = 0), поэтому первым же пакетом уходит рукопожатие фиксированного размера — ровно тот отпечаток, который видно ниже.",
+		"sim.notePad":
+			" Паддинг S1/S2 добавляет {s1} и {s2} байт внутрь самих пакетов рукопожатия, поэтому 148 и 92 превращаются в {i} и {r}.",
+		"sim.bytes": "байт",
+		"hist.title": "История",
+		"hist.lead":
+			"Seed каждой генерации хранится в этом браузере. По seed конфиг воспроизводится побайтово — приватные ключи здесь не сохраняются.",
+		"hist.saved": "Сохранённые сборки",
+		"hist.export": "Экспорт в файл",
+		"hist.clear": "Очистить",
+		"hist.empty": "Пока пусто. Сгенерируйте конфиг — сюда попадёт его seed.",
+		"hist.restore": "Восстановить",
+		"hist.restored": "Seed подставлен, параметры пересобраны",
+		"hist.cleared": "История очищена",
+		"hist.exported": "История сохранена в файл",
+		"faq.title": "FAQ",
+		"faq.lead": "Ответы на то, из-за чего конфиг обычно не поднимается.",
+	},
+	en: {
+		"nav.gen": "Generator",
+		"nav.params": "Parameter breakdown",
+		"nav.sim": "Packet simulator",
+		"nav.hist": "History",
+		"nav.faq": "FAQ",
+		"side.note": "Keys are created on the server per request and never written to disk.",
+		"hero.title": "A blueprint, not a generate button",
+		"hero.lead":
+			"Every number in the config can be unfolded: where its bound comes from, which side reads it, and what breaks if the two sides disagree.",
+		"hero.warpTag": "works with WARP",
+		"hero.warpDesc":
+			"It is plain WireGuard. Only junk packets Jc/Jmin/Jmax are allowed.",
+		"hero.awgTag": "your own server only",
+		"hero.awgDesc":
+			"S1/S2, H1–H4 and protocol mimicry. WARP rejects that handshake.",
+		"obf.explain": "Explain every number →",
+		"pdoc.title": "Parameter breakdown",
+		"pdoc.lead":
+			"For every parameter: the value, which side reads it, where its bound comes from, and what happens if the server has a different one.",
+		"pdoc.tagGen": "generated",
+		"pdoc.tagMan": "set by hand",
+		"pdoc.tagOff": "deliberately off",
+		"pdoc.empty": "Parameters appear as soon as the obfuscation profile loads.",
+		"pdoc.who": "Read by",
+		"pdoc.bound": "Bound comes from",
+		"pdoc.break": "If the sides disagree",
+		"sim.title": "Packet simulator",
+		"sim.lead":
+			"What the start of a session looks like on the wire: junk packets first, then the real handshake, then data.",
+		"sim.wire": "Traffic on the wire",
+		"sim.junk": "junk packets",
+		"sim.init": "handshake initiation",
+		"sim.resp": "handshake response",
+		"sim.data": "data",
+		"sim.fp": "The fingerprint we are escaping",
+		"sim.fpHint":
+			"Plain WireGuard: 148 bytes, then 92. Two fixed sizes in a row are enough to identify the protocol from the first two packets.",
+		"sim.noteJunk":
+			"{jc} junk packets of {jmin}–{jmax} bytes go out before the handshake. Sizes stop being predictable for an observer, and WARP drops them silently: they are separate UDP datagrams, not part of the handshake.",
+		"sim.noteNoJunk":
+			"Junk packets are off (Jc = 0), so the very first packet is a fixed-size handshake — exactly the fingerprint shown below.",
+		"sim.notePad":
+			" S1/S2 padding adds {s1} and {s2} bytes inside the handshake packets themselves, so 148 and 92 become {i} and {r}.",
+		"sim.bytes": "bytes",
+		"hist.title": "History",
+		"hist.lead":
+			"The seed of every build is kept in this browser. A seed reproduces the config byte for byte — private keys are never stored here.",
+		"hist.saved": "Saved builds",
+		"hist.export": "Export to file",
+		"hist.clear": "Clear",
+		"hist.empty": "Empty so far. Generate a config and its seed lands here.",
+		"hist.restore": "Restore",
+		"hist.restored": "Seed applied, parameters rebuilt",
+		"hist.cleared": "History cleared",
+		"hist.exported": "History saved to a file",
+		"faq.title": "FAQ",
+		"faq.lead": "Answers to the things that usually keep a config from connecting.",
+	},
+}
+
+Object.assign(I18N.ru, EXTRA_I18N.ru)
+Object.assign(I18N.en, EXTRA_I18N.en)
+
+// ------------------------------------------------------------------ router
+
+const VIEWS = ["gen", "params", "sim", "hist", "faq"]
+
+function showView(name) {
+	const target = VIEWS.includes(name) ? name : "gen"
+	for (const view of VIEWS) {
+		const node = $("view-" + view)
+		if (!node) continue
+		node.hidden = view !== target
+		node.classList.toggle("is-active", view === target)
+	}
+	for (const item of document.querySelectorAll(".nav__item")) {
+		item.classList.toggle("is-active", item.dataset.view === target)
+	}
+	// Deep links keep a section shareable and survive a refresh.
+	if (location.hash.slice(1) !== target) {
+		history.replaceState(null, "", "#" + target)
+	}
+	window.scrollTo({ top: 0, behavior: "instant" })
+}
+
+// --------------------------------------------------------------------- FAQ
+
+const FAQ = [
+	{
+		q: {
+			ru: "Конфиг импортируется, но туннель не поднимается. Почему?",
+			en: "The config imports fine but the tunnel never connects. Why?",
+		},
+		a: {
+			ru: "Почти всегда потому, что в конфиге есть S1/S2 или H1–H4, а сервер — Cloudflare WARP. WARP работает на стоковом WireGuard: паддинг S1/S2 лежит внутри пакетов рукопожатия и меняет их длину, а H1–H4 подменяют байт типа сообщения, который сервер ждёт равным 1, 2, 3 или 4. Клиент такой конфиг примет, от��равит рукопожатие — и не получит ответа. Выбирайте профили warp-*: в них только junk-пакеты.",
+			en: "Almost always because the config carries S1/S2 or H1–H4 while the server is Cloudflare WARP. WARP runs stock WireGuard: S1/S2 padding sits inside the handshake packets and changes their length, and H1–H4 replace the message type byte the server expects to be 1, 2, 3 or 4. The client accepts such a config, sends the handshake, and gets nothing back. Pick the warp-* profiles: they only use junk packets.",
+		},
+	},
+	{
+		q: {
+			ru: "Почему junk-пакеты не ломают WARP, а S1/S2 ломают?",
+			en: "Why do junk packets not break WARP while S1/S2 do?",
+		},
+		a: {
+			ru: "Junk — это отдельные UDP-датаграммы со случайным содержимым, отправленные перед рукопожатием. Для сервера это мусор на порту: он не разбирает их как WireGuard и молча отбрасывает. S1/S2 же добавляют байты внутрь самого пакета рукопожатия, а его длина в WireGuard фиксирована — 148 байт у initiation и 92 у response. Пакет другой длины сервер не примет.",
+			en: "Junk is separate UDP datagrams with random content sent before the handshake. To the server it is noise on the port: it never parses them as WireGuard and drops them silently. S1/S2 instead add bytes inside the handshake packet, and its length in WireGuard is fixed — 148 bytes for initiation, 92 for response. A packet of any other length is rejected.",
+		},
+	},
+	{
+		q: {
+			ru: "Сканирование всегда находит один дата-центр. Это баг?",
+			en: "The scan always finds a single datacenter. Is that a bug?",
+		},
+		a: {
+			ru: "Нет, это как работает anycast. Cloudflare анонсирует одни и те же адреса из сотен дата-центров, и маршрут выбирает BGP, а не IP. Из одной точки все адреса ведут в один ближайший колокейшн, поэтому «1 из 14» — правильный ответ. Если сайт где-то захостен, точка эта — регион хостинга, а не ваш провайдер; свой настоящий колокейшн показывает браузерное измерение в блоке «Локация».",
+			en: "No, that is how anycast works. Cloudflare announces the same addresses from hundreds of datacenters and BGP picks the route, not the IP. From a single vantage point every address leads to the same nearest colo, so \"1 of 14\" is the correct answer. If the site is hosted somewhere, that vantage point is the hosting region rather than your ISP; your own real colo is shown by the browser-side measurement in the Location card.",
+		},
+	},
+	{
+		q: { ru: "Можно ли выбрать страну выхода?", en: "Can I choose the exit country?" },
+		a: {
+			ru: "Обычным бесплатным WARP — нет, и ни один генератор этого не изменит: маршрут решает anycast. Влиять можно косвенно — сменой префикса и порта, потому что провайдеры маршрутизируют разные префиксы по-разному. Гарантированный выбор страны даёт WARP+ / Zero Trust с выделенным egress либо свой сервер AmneziaWG в нужной стране.",
+			en: "Not with plain free WARP, and no generator can change that: anycast decides the route. You can influence it indirectly by changing the prefix and port, because ISPs route different prefixes differently. A guaranteed country requires WARP+ / Zero Trust with dedicated egress, or your own AmneziaWG server there.",
+		},
+	},
+	{
+		q: { ru: "Зачем seed?", en: "What is the seed for?" },
+		a: {
+			ru: "Обфускация обязана совпадать на обеих сторонах. Seed делает набор параметров воспроизводимым: вставьте тот же seed на другом устройстве или на сервере — получите те же Jc, Jmin, Jmax, S1, S2 и заголовки. Без него каждая генерация даёт новый набор, и стороны разойдутся.",
+			en: "Obfuscation has to match on both sides. The seed makes the parameter set reproducible: paste the same seed on another device or on the server and you get the same Jc, Jmin, Jmax, S1, S2 and headers. Without it every run produces a new set and the sides drift apart.",
+		},
+	},
+	{
+		q: { ru: "Почему MTU 1280, а не 1420?", en: "Why is the MTU 1280 and not 1420?" },
+		a: {
+			ru: "1280 — значение по умолчанию у самого WARP и минимальный MTU, обязательный для IPv6, поэтому он безопасен в любой сети. Накладные расходы WireGuard: 20 байт IPv4 (40 для IPv6) + 8 UDP + 16 заголовок transport + 16 Poly1305, то есть 60 или 80. От 1500 остаётся 1440 в идеальной сети, но мобильные и PPPoE-каналы часто меньше. AmneziaWG сверху ничего не добавляет: junk уходит отдельными пакетами.",
+			en: "1280 is WARP's own default and the minimum MTU required for IPv6, so it is safe on any network. WireGuard overhead is 20 bytes IPv4 (40 for IPv6) + 8 UDP + 16 transport header + 16 Poly1305, i.e. 60 or 80. That leaves 1440 out of 1500 on a perfect link, but mobile and PPPoE paths are often smaller. AmneziaWG adds nothing on top: junk goes out as separate packets.",
+		},
+	},
+	{
+		q: {
+			ru: "Что делает мимикрия под протокол и почему только со своим сервером?",
+			en: "What does protocol mimicry do and why only with your own server?",
+		},
+		a: {
+			ru: "Мимикрия заставляет первые пакеты выглядеть как TLS ClientHello, QUIC Initial или DNS-запрос — вплоть до подставного домена в SNI. Это возможности AmneziaWG 1.5+, и их обязан понимать сервер. WARP о них не знает, поэтому такие профили помечены «≠ WARP» и годятся только для вашего собственного сервера AmneziaWG.",
+			en: "Mimicry makes the first packets look like a TLS ClientHello, a QUIC Initial or a DNS query, down to a fake domain in the SNI. These are AmneziaWG 1.5+ features and the server has to understand them. WARP does not, which is why those profiles are marked \"≠ WARP\" and only fit your own AmneziaWG server.",
+		},
+	},
+	{
+		q: {
+			ru: "H1–H4 можно использовать с WARP хоть как-нибудь?",
+			en: "Can H1–H4 be used with WARP at all?",
+		},
+		a: {
+			ru: "Только в одном частном случае: если вывести их из client id вашей регистрации WARP по формуле H(n) = n + r0·2⁸ + r1·2¹⁶ + r2·2²⁴, где r — три байта reserved. Тогда старший байт остаётся равным номеру типа сообщения, и сервер по-прежнему видит 1, 2, 3, 4. Это включается флагом --client-id-headers и по умолчанию выключено, потому что случайные H1–H4 туннель гарантированно ломают.",
+			en: "Only in one special case: derive them from your WARP registration's client id as H(n) = n + r0·2⁸ + r1·2¹⁶ + r2·2²⁴, where r is the three reserved bytes. The low byte then still equals the message type, so the server keeps seeing 1, 2, 3, 4. This is enabled with --client-id-headers and off by default, because random H1–H4 break the tunnel for certain.",
+		},
+	},
+]
+
+function renderFaq() {
+	const host = $("faqList")
+	if (!host) return
+	const lang = state.lang === "en" ? "en" : "ru"
+	host.replaceChildren(
+		...FAQ.map((item) => {
+			const details = document.createElement("details")
+			details.className = "faq__item"
+			const summary = document.createElement("summary")
+			summary.textContent = item.q[lang]
+			details.append(summary, el("p", null, item.a[lang]))
+			return details
+		}),
+	)
+}
+
+// ----------------------------------------------------------------- history
+
+const HIST_KEY = "awg-history"
+const HIST_LIMIT = 20
+
+function readHistory() {
+	try {
+		const parsed = JSON.parse(localStorage.getItem(HIST_KEY) || "[]")
+		return Array.isArray(parsed) ? parsed : []
+	} catch {
+		return []
+	}
+}
+
+function writeHistory(entries) {
+	try {
+		localStorage.setItem(HIST_KEY, JSON.stringify(entries.slice(0, HIST_LIMIT)))
+	} catch {
+		// Private mode or a full quota: history is a convenience, never a blocker.
+	}
+}
+
+/** Store only what a seed needs to be reproducible. Never key material. */
+function pushHistory(result) {
+	const obf = result.obfuscation || {}
+	const entry = {
+		ts: Date.now(),
+		seed: result.meta?.seed || "",
+		profile: obf.profileLabel || "",
+		profileRu: obf.profileLabelRu || "",
+		compat: obf.compat || "",
+		endpoint: result.endpoint?.endpoint || "",
+		mtu: result.network?.mtu || null,
+		colo: result.location?.measured ? result.location.colo : "",
+	}
+	const entries = readHistory().filter((e) => e.seed !== entry.seed)
+	entries.unshift(entry)
+	writeHistory(entries)
+	renderHistory()
+}
+
+function renderHistory() {
+	const host = $("histList")
+	if (!host) return
+	const entries = readHistory()
+	const count = $("navHistCount")
+	if (count) count.textContent = entries.length ? String(entries.length) : ""
+
+	if (!entries.length) {
+		host.replaceChildren(el("p", "field__hint", t("hist.empty")))
+		return
+	}
+
+	host.replaceChildren(
+		...entries.map((entry) => {
+			const row = el("div", "histrow")
+			const label =
+				state.lang === "ru" && entry.profileRu ? entry.profileRu : entry.profile
+
+			const main = el("div", "histrow__main")
+			main.append(el("code", "histrow__seed", entry.seed))
+			main.append(el("span", "histrow__label", label))
+
+			const meta = el("div", "histrow__meta")
+			const bits = [new Date(entry.ts).toLocaleString()]
+			if (entry.endpoint) bits.push(entry.endpoint)
+			if (entry.colo) bits.push(entry.colo)
+			if (entry.mtu) bits.push("MTU " + entry.mtu)
+			meta.textContent = bits.join(" · ")
+
+			const button = el("button", "btn btn--ghost btn--sm", t("hist.restore"))
+			button.type = "button"
+			button.addEventListener("click", () => {
+				$("seed").value = entry.seed
+				refreshObfuscation(entry.seed)
+				showView("gen")
+				toast(t("hist.restored"))
+			})
+
+			const left = el("div")
+			left.append(main, meta)
+			row.append(left, button)
+			return row
+		}),
+	)
+}
+
+// ------------------------------------------------------- parameter breakdown
+
+/**
+ * Per-parameter provenance. The generator already explains *what* a number
+ * does (obf.explain[].what); this adds the three things that actually decide
+ * whether a tunnel comes up: who reads it, where its bound comes from, and
+ * what breaks when the two sides disagree.
+ */
+const PARAM_DOCS = {
+	jc: {
+		who: { ru: "только отправитель", en: "sender only" },
+		bound: { ru: "0–128, граница AmneziaWG", en: "0–128, AmneziaWG limit" },
+		break: {
+			ru: "Ничего. Серверу не нужно знать это число — он просто отбрасывает мусор. Поэтому junk безопасен для WARP.",
+			en: "Nothing. The server never needs this number — it just drops the junk. That is why junk is safe with WARP.",
+		},
+	},
+	jmin: {
+		who: { ru: "только отправитель", en: "sender only" },
+		bound: { ru: "8–1280, должно быть меньше Jmax", en: "8–1280, must stay below Jmax" },
+		break: {
+			ru: "Ничего на стороне сервера. Но Jmin = Jmax даёт мусор постоянного размера — тот же отпечаток, от которого уходим.",
+			en: "Nothing server-side. But Jmin = Jmax produces constant-size junk — the very fingerprint we are trying to lose.",
+		},
+	},
+	jmax: {
+		who: { ru: "только отправитель", en: "sender only" },
+		bound: {
+			ru: "≤ 1280, чтобы мусор не фрагментировался",
+			en: "≤ 1280 so junk never fragments",
+		},
+		break: {
+			ru: "Сервер не заметит. Но если поставить больше MTU канала, мусорные пакеты начнут дробиться и станут заметнее обычного трафика.",
+			en: "The server will not notice. But above the path MTU the junk starts fragmenting and stands out more than plain traffic.",
+		},
+	},
+	s1: {
+		who: { ru: "обе стороны", en: "both sides" },
+		bound: { ru: "15–1280, и S1 + 56 ≠ S2", en: "15–1280, and S1 + 56 ≠ S2" },
+		break: {
+			ru: "Рукопожатие молча отбрасывается: пакет initiation пришёл не того размера. С WARP всегда должен быть 0. Ограничение S1 + 56 ≠ S2 нужно, чтобы initiation с паддингом не стал ровно размером с response.",
+			en: "The handshake is dropped silently: the initiation packet arrived at the wrong size. With WARP it must always be 0. The S1 + 56 ≠ S2 rule keeps a padded initiation from becoming exactly the size of a response.",
+		},
+	},
+	s2: {
+		who: { ru: "обе стороны", en: "both sides" },
+		bound: { ru: "15–1280, и S1 + 56 ≠ S2", en: "15–1280, and S1 + 56 ≠ S2" },
+		break: {
+			ru: "Клиент не узнаёт ответ сервера и будет повторять рукопожатие до таймаута. С WARP всегда 0.",
+			en: "The client fails to recognise the server's reply and retries the handshake until it times out. With WARP always 0.",
+		},
+	},
+	h1: {
+		who: { ru: "обе стороны", en: "both sides" },
+		bound: {
+			ru: "5–2147483647, все четыре H различны",
+			en: "5–2147483647, all four H values distinct",
+		},
+		break: {
+			ru: "Сервер видит неизвестный тип сообщения и не отвечает вовсе. Граница «от 5» существует потому, что 1–4 заняты штатными типами WireGuard.",
+			en: "The server sees an unknown message type and answers nothing at all. The \"from 5\" bound exists because 1–4 are taken by the standard WireGuard types.",
+		},
+	},
+	h2: {
+		who: { ru: "обе стороны", en: "both sides" },
+		bound: { ru: "как H1, но ≠ H1", en: "same as H1 but ≠ H1" },
+		break: {
+			ru: "То же, что с H1, только теряется ответ сервера, а не запрос клиента.",
+			en: "Same as H1, except the server's reply is lost rather than the client's request.",
+		},
+	},
+	h3: {
+		who: { ru: "обе стороны", en: "both sides" },
+		bound: { ru: "как H1, но ≠ H1, H2", en: "same as H1 but ≠ H1, H2" },
+		break: {
+			ru: "Ломается cookie reply — защита от перегрузки. Туннель может работать, пока сервер не под нагрузкой — самый коварный вариант расхождения.",
+			en: "Breaks the cookie reply, the overload protection. The tunnel may work until the server is under load — the nastiest kind of mismatch.",
+		},
+	},
+	h4: {
+		who: { ru: "обе стороны", en: "both sides" },
+		bound: { ru: "как H1, но ≠ H1–H3", en: "same as H1 but ≠ H1–H3" },
+		break: {
+			ru: "Ломаются транспортные пакеты, то есть сами данные. Рукопожатие пройдёт, интерфейс поднимется, но трафик идти не будет.",
+			en: "Breaks transport packets, i.e. the data itself. The handshake completes and the interface comes up, but no traffic flows.",
+		},
+	},
+	itime: {
+		who: { ru: "отправитель, AmneziaWG 1.5+", en: "sender, AmneziaWG 1.5+" },
+		bound: { ru: "0–3600 секунд", en: "0–3600 seconds" },
+		break: {
+			ru: "Старые сборки клиента просто не примут поле и откажутся импортировать конфиг.",
+			en: "Older client builds simply do not accept the field and refuse to import the config.",
+		},
+	},
+}
+
+function docFor(key) {
+	return PARAM_DOCS[String(key).toLowerCase()] || null
+}
+
+function paramTag(key, value) {
+	// Rows can cover several parameters at once: "Jmin / Jmax", "H1-H4".
+	const parts = String(key)
+		.toLowerCase()
+		.replace(/\s+/g, "")
+		.replace("h1-h4", "h1/h2/h3/h4")
+		.split("/")
+
+	// Values may be strings such as "0 / 0" or "58 / 162", so read every number.
+	const numbers = String(value).match(/-?\d+/g)
+	if (numbers && numbers.every((n) => Number(n) === 0)) {
+		return { cls: "tagd--off", label: t("pdoc.tagOff") }
+	}
+
+	const manual = parts.some((part) => {
+		const raw = state.overrides ? state.overrides[part] : undefined
+		return raw !== undefined && raw !== null && raw !== "" && Number.isFinite(Number(raw))
+	})
+	if (manual) return { cls: "tagd--man", label: t("pdoc.tagMan") }
+
+	return { cls: "tagd--gen", label: t("pdoc.tagGen") }
+}
+
+function renderParamDocs() {
+	const host = $("pdocList")
+	if (!host) return
+	const obf = state.obfuscation
+	const rows = obf && obf.enabled && Array.isArray(obf.explain) ? obf.explain : []
+	const count = $("navParamsCount")
+	if (count) count.textContent = rows.length ? String(rows.length) : ""
+
+	if (!rows.length) {
+		const text = obf && !obf.enabled ? pickText(obf, "summary") : t("pdoc.empty")
+		host.replaceChildren(el("p", "field__hint", text))
+		return
+	}
+
+	host.replaceChildren(
+		...rows.map((row) => {
+			const card = el("article", "pdoc__item")
+			const head = el("div", "pdoc__head")
+			head.append(el("code", "pdoc__key", row.key))
+			head.append(el("span", "pdoc__val", String(row.value)))
+			const tag = paramTag(row.key, row.value)
+			head.append(el("span", `tagd ${tag.cls}`, tag.label))
+			card.append(head)
+			card.append(el("p", "pdoc__what", pickText(row, "what")))
+
+			const doc = docFor(row.key)
+			if (doc) {
+				const lang = state.lang === "en" ? "en" : "ru"
+				const grid = el("dl", "pdoc__grid")
+				for (const [label, value] of [
+					[t("pdoc.who"), doc.who[lang]],
+					[t("pdoc.bound"), doc.bound[lang]],
+					[t("pdoc.break"), doc.break[lang]],
+				]) {
+					grid.append(el("dt", null, label))
+					grid.append(el("dd", null, value))
+				}
+				card.append(grid)
+			}
+			return card
+		}),
+	)
+}
+
+// ------------------------------------------------------------ packet simulator
+
+/** Fixed WireGuard sizes: this is the fingerprint obfuscation hides. */
+const WG_INIT = 148
+const WG_RESP = 92
+
+function simBar(kind, bytes, label, max) {
+	const row = el("div", "simbar")
+	const track = el("div", "simbar__track")
+	const fill = el("div", `simbar__fill simbar__fill--${kind}`)
+	fill.style.width = `${Math.max(4, Math.round((bytes / max) * 100))}%`
+	track.append(fill)
+	row.append(el("span", "simbar__label", label))
+	row.append(track)
+	row.append(el("span", "simbar__size", `${bytes} ${t("sim.bytes")}`))
+	return row
+}
+
+function renderSimulator() {
+	const host = $("simWire")
+	const plain = $("simPlain")
+	if (!host || !plain) return
+
+	const obf = state.obfuscation
+	const params = obf && obf.enabled ? obf.params || {} : {}
+	const jc = Number(params.jc || 0)
+	const jmin = Number(params.jmin || 0)
+	const jmax = Number(params.jmax || 0)
+	const s1 = Number(params.s1 || 0)
+	const s2 = Number(params.s2 || 0)
+	const initSize = WG_INIT + s1
+	const respSize = WG_RESP + s2
+
+	const profile = $("simProfile")
+	if (profile) {
+		profile.textContent = obf ? pickText(obf, "label") || "" : ""
+	}
+
+	// Junk sizes are random per packet; spread them across the range so the
+	// picture shows variance rather than one repeated number.
+	const rows = []
+	for (let i = 0; i < Math.min(jc, 12); i += 1) {
+		const span = Math.max(0, jmax - jmin)
+		const size = jc <= 1 ? jmax : jmin + Math.round((span * i) / Math.max(1, jc - 1))
+		rows.push({ kind: "junk", bytes: size, label: `junk ${i + 1}` })
+	}
+	rows.push({ kind: "init", bytes: initSize, label: t("sim.init") })
+	rows.push({ kind: "resp", bytes: respSize, label: t("sim.resp") })
+	rows.push({ kind: "data", bytes: 128, label: t("sim.data") })
+	rows.push({ kind: "data", bytes: 1280, label: t("sim.data") })
+
+	const max = Math.max(...rows.map((r) => r.bytes), 1280)
+	host.replaceChildren(...rows.map((r) => simBar(r.kind, r.bytes, r.label, max)))
+
+	plain.replaceChildren(
+		simBar("init", WG_INIT, t("sim.init"), max),
+		simBar("resp", WG_RESP, t("sim.resp"), max),
+	)
+
+	const note = $("simNote")
+	if (note) {
+		let text =
+			jc > 0
+				? t("sim.noteJunk", { jc, jmin, jmax })
+				: t("sim.noteNoJunk")
+		if (s1 > 0 || s2 > 0) {
+			text += t("sim.notePad", { s1, s2, i: initSize, r: respSize })
+		}
+		note.textContent = text
+	}
+}
+
+// ------------------------------------------------------------------- hooks
+
+/** Called at the end of renderParams(): keeps the new sections in sync. */
+function afterParams() {
+	try {
+		renderParamDocs()
+		renderSimulator()
+	} catch {
+		// A broken side panel must never take the generator down with it.
+	}
+}
+
+/** Called after renderSummary(): a finished build becomes a history entry. */
+function afterGenerate(result) {
+	try {
+		pushHistory(result)
+	} catch {
+		// ignore
+	}
+}
+
+function rerenderSections() {
+	applyStaticI18n()
+	renderFaq()
+	renderHistory()
+	renderParamDocs()
+	renderSimulator()
+}
+
+function wireSections() {
+	for (const item of document.querySelectorAll(".nav__item")) {
+		item.addEventListener("click", () => showView(item.dataset.view))
+	}
+	$("toParams")?.addEventListener("click", () => showView("params"))
+
+	$("histClear")?.addEventListener("click", () => {
+		writeHistory([])
+		renderHistory()
+		toast(t("hist.cleared"))
+	})
+
+	$("histExport")?.addEventListener("click", () => {
+		const blob = new Blob([JSON.stringify(readHistory(), null, 2)], {
+			type: "application/json",
+		})
+		const url = URL.createObjectURL(blob)
+		const link = document.createElement("a")
+		link.href = url
+		link.download = "awg-warp-history.json"
+		link.click()
+		URL.revokeObjectURL(url)
+		toast(t("hist.exported"))
+	})
+
+	// The language buttons already have their handler from wire(); ours runs
+	// afterwards and re-renders the sections this file owns.
+	$("langRu")?.addEventListener("click", rerenderSections)
+	$("langEn")?.addEventListener("click", rerenderSections)
+
+	window.addEventListener("hashchange", () => showView(location.hash.slice(1)))
+}
+
+wireSections()
+// init() ran before this block was evaluated, so re-apply the labels that only
+// exist in EXTRA_I18N now that they are merged in.
+applyStaticI18n()
+renderFaq()
+renderHistory()
+showView(location.hash.slice(1) || "gen")
+
+/*
+ * The API returns some parameters as one combined row ("Jmin / Jmax",
+ * "S1 / S2", "H1-H4") and the mimicry signatures as I1-I5. Their notes live in
+ * param-docs.js, keyed by the lowercased row label so docFor() finds them
+ * without any extra lookup logic.
+ */
+import { GROUP_PARAM_DOCS } from "./param-docs.js"
+
+Object.assign(PARAM_DOCS, GROUP_PARAM_DOCS)

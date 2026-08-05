@@ -8,10 +8,11 @@
 			name="description"
 			content="Генератор конфигов Cloudflare WARP с измеряемым выбором локации и обфускацией AmneziaWG."
 		/>
+		<meta name="theme-color" content="#130f1e" />
 		<link rel="stylesheet" href="/styles.css" />
 		<link
 			rel="icon"
-			href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232783DE'/%3E%3Cpath d='M9 20l5-9 4 6 2-3 3 6z' fill='white'/%3E%3C/svg%3E"
+			href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23A482FF'/%3E%3Cpath d='M8 21l5.5-10L18 18l2.2-3.4L25 21z' fill='%23150F26'/%3E%3C/svg%3E"
 		/>
 	</head>
 	<body>
@@ -20,8 +21,8 @@
 				<div class="brand">
 					<span class="brand__mark" aria-hidden="true">
 						<svg viewBox="0 0 32 32" width="28" height="28">
-							<rect width="32" height="32" rx="7" fill="currentColor" />
-							<path d="M8 21l5.5-10L18 18l2.2-3.4L25 21z" fill="#fff" />
+							<rect width="32" height="32" rx="9" fill="currentColor" />
+							<path d="M8 21l5.5-10L18 18l2.2-3.4L25 21z" fill="#150f26" />
 						</svg>
 					</span>
 					<span>
@@ -40,250 +41,413 @@
 			</div>
 		</header>
 
-		<main class="shell layout">
-			<!-- ------------------------------ CONTROLS ------------------------------ -->
-			<div class="controls">
-				<section class="card">
-					<div class="card__head">
-						<h2 data-i18n="loc.title">Локация</h2>
-						<button class="btn btn--ghost btn--sm" id="scanBtn" type="button" data-i18n="loc.scan">
-							Сканировать дата-центры
-						</button>
-					</div>
-
-					<div class="note note--info" id="localityNote">
-						<p id="localitySummary"></p>
-						<details>
-							<summary data-i18n="loc.why">Почему нет выпадающего списка стран</summary>
-							<ul id="localityDetails"></ul>
-						</details>
-					</div>
-
-					<div class="note note--warn" id="serverlessNote" hidden>
-						<p id="serverlessNoteText"></p>
-					</div>
-
-					<div class="note" id="viewerNote" hidden>
-						<p id="viewerColoText"></p>
-					</div>
-
-					<div id="scanPanel" hidden>
-						<div class="scan__status" id="scanStatus"></div>
-						<div class="scan__list" id="scanList"></div>
-					</div>
-
-					<div class="grid grid--2">
-						<label class="field">
-							<span class="field__label" data-i18n="loc.prefix">Префикс endpoint</span>
-							<select id="endpointPrefix"></select>
-							<span class="field__hint" id="prefixHint"></span>
-						</label>
-
-						<label class="field">
-							<span class="field__label" data-i18n="loc.port">UDP-порт</span>
-							<select id="endpointPort"></select>
-							<span class="field__hint" id="portHint"></span>
-						</label>
-					</div>
-
-					<label class="field">
-						<span class="field__label">
-							<span data-i18n="loc.pin">Закрепить точный endpoint</span>
-							<span class="field__opt" data-i18n="common.optional">необязательно</span>
-						</span>
-						<input id="endpointHost" type="text" placeholder="162.159.193.10:2408" autocomplete="off" spellcheck="false" />
-						<span class="field__hint" data-i18n="loc.pinHint">Переопределяет префикс и порт выше.</span>
-					</label>
-
-					<label class="check">
-						<input type="checkbox" id="detectLocation" checked />
-						<span>
-							<span data-i18n="loc.measure">Измерить реальный дата-центр выхода после генерации</span>
-							<em data-i18n="loc.measureHint">Добавляет около секунды, зато показывает, где вы реально выходите.</em>
-						</span>
-					</label>
-				</section>
-
-				<section class="card">
-					<div class="card__head">
-						<h2 data-i18n="obf.title">Обфускация</h2>
-						<button class="btn btn--ghost btn--sm" id="rerollBtn" type="button" data-i18n="obf.reroll">
-							Перегенерировать
-						</button>
-					</div>
-
-					<div class="note note--warn" id="compatNote" hidden>
-						<p id="compatNoteText"></p>
-					</div>
-
-					<div class="profiles" id="profiles" role="radiogroup" aria-label="Obfuscation profile"></div>
-
-					<!-- ---------------------- PROTOCOL MIMICRY ---------------------- -->
-					<div class="mimicry" id="mimicryWrap" hidden>
-						<div class="params__head">
-							<h3 data-i18n="mim.title">Под какой протокол маскироваться</h3>
-							<span class="pill pill--muted">AWG 1.5</span>
-						</div>
-						<p class="field__hint" data-i18n="mim.intro">
-							Первые пакеты туннеля будут выглядеть как выбранный протокол. Выберите до пяти.
-						</p>
-
-						<div class="sigs" id="mimicrySignatures"></div>
-
-						<div class="grid grid--2">
-							<label class="field">
-								<span class="field__label" data-i18n="mim.domain">Домен для подстановки (SNI)</span>
-								<select id="mimicryDomain"></select>
-								<span class="field__hint" id="mimicryDomainHint"></span>
-							</label>
-
-							<label class="field">
-								<span class="field__label">
-									<span data-i18n="mim.custom">Свой домен</span>
-									<span class="field__opt" data-i18n="common.optional">необязательно</span>
-								</span>
-								<input id="mimicryDomainCustom" type="text" placeholder="example.com" spellcheck="false" autocomplete="off" />
-								<span class="field__hint" data-i18n="mim.customHint">Перебивает выбор слева.</span>
-							</label>
-						</div>
-					</div>
-
-					<div class="params" id="paramsPanel">
-						<div class="params__head">
-							<h3 data-i18n="obf.params">Сгенерированные параметры</h3>
-							<span class="pill pill--muted" id="awgVersion"></span>
-						</div>
-						<dl class="params__list" id="paramsList"></dl>
-					</div>
-
-					<details class="advanced" id="advancedWrap">
-						<summary data-i18n="obf.manual">Править параметры вручную</summary>
-						<p class="advanced__warn" id="advancedWarn"></p>
-						<div class="grid grid--3" id="overrideGrid"></div>
-						<div class="validation" id="validation"></div>
-					</details>
-
-					<label class="field">
-						<span class="field__label">
-							<span data-i18n="obf.seed">Seed</span>
-							<span class="field__opt" data-i18n="obf.seedOpt">воспроизводит профиль</span>
-						</span>
-						<input id="seed" type="text" data-i18n-ph="obf.seedPh" placeholder="оставьте пустым для нового" spellcheck="false" autocomplete="off" />
-						<span class="field__hint" data-i18n="obf.seedHint">Вставьте прошлый seed, чтобы получить точно такую же обфускацию на другом устройстве.</span>
-					</label>
-				</section>
-
-				<section class="card">
-					<div class="card__head"><h2 data-i18n="net.title">Сеть</h2></div>
-
-					<div class="grid grid--2">
-						<label class="field">
-							<span class="field__label" data-i18n="net.routing">Маршрутизация</span>
-							<select id="allowedIps"></select>
-							<span class="field__hint" id="allowedHint"></span>
-						</label>
-
-						<label class="field">
-							<span class="field__label">DNS</span>
-							<select id="dns"></select>
-						</label>
-
-						<label class="field">
-							<span class="field__label" data-i18n="net.mtu">MTU канала</span>
-							<select id="pathMtu"></select>
-							<span class="field__hint" id="mtuHint"></span>
-						</label>
-
-						<label class="field">
-							<span class="field__label" data-i18n="net.keepalive">Keepalive (секунды)</span>
-							<input id="keepalive" type="number" min="0" max="600" value="25" />
-							<span class="field__hint" data-i18n="net.keepaliveHint">0 отключает. 25 держит NAT открытым на мобильном.</span>
-						</label>
-					</div>
-
-					<label class="check">
-						<input type="checkbox" id="ipv6" checked />
-						<span>
-							<span data-i18n="net.ipv6">Включить IPv6</span>
-							<em data-i18n="net.ipv6Hint">Выключите, если у провайдера IPv6 сломан или течёт.</em>
-						</span>
-					</label>
-					<label class="check">
-						<input type="checkbox" id="presharedKey" />
-						<span>
-							<span data-i18n="net.psk">Добавить pre-shared key</span>
-							<em data-i18n="net.pskHint">Дополнительный симметричный слой. Для WARP необязателен.</em>
-						</span>
-					</label>
-				</section>
-
-				<section class="card">
-					<div class="card__head"><h2 data-i18n="id.title">Идентичность</h2></div>
-					<label class="field">
-						<span class="field__label">
-							<span data-i18n="id.privateKey">Существующий приватный ключ</span>
-							<span class="field__opt" data-i18n="common.optional">необязательно</span>
-						</span>
-						<input id="privateKey" type="text" data-i18n-ph="id.privateKeyPh" placeholder="base64, 44 символа" spellcheck="false" autocomplete="off" />
-						<span class="field__hint" data-i18n="id.privateKeyHint">Переиспользуйте ключ, чтобы пересобрать конфиг, не меняя идентичность.</span>
-					</label>
-					<label class="field">
-						<span class="field__label">
-							<span data-i18n="id.license">Лицензия WARP+</span>
-							<span class="field__opt" data-i18n="common.optional">необязательно</span>
-						</span>
-						<input id="license" type="text" placeholder="xxxxxxxx-xxxxxxxx-xxxxxxxx" spellcheck="false" autocomplete="off" />
-					</label>
-				</section>
-
-				<div class="actions">
-					<button class="btn btn--primary btn--lg" id="generateBtn" type="button" data-i18n="action.generate">
-						Сгенерировать конфиг
+		<div class="shell app">
+			<!-- ------------------------------ SIDEBAR ------------------------------ -->
+			<aside class="side">
+				<nav class="nav" id="nav" aria-label="Разделы">
+					<button type="button" class="nav__item is-active" data-view="gen">
+						<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+							<path d="M4 7h16M4 12h10M4 17h13" />
+						</svg>
+						<span data-i18n="nav.gen">Генератор</span>
 					</button>
-					<p class="actions__hint" data-i18n="action.hint">
-						Регистрирует новое устройство в Cloudflare и собирает конфиг. Ключи не покидают память сервера.
+					<button type="button" class="nav__item" data-view="params">
+						<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+							<circle cx="12" cy="12" r="8.5" />
+							<path d="M12 8.5v.01M12 11.5v4" />
+						</svg>
+						<span data-i18n="nav.params">Разбор параметров</span>
+						<span class="nav__count" id="navParamsCount"></span>
+					</button>
+					<button type="button" class="nav__item" data-view="sim">
+						<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+							<path d="M4 18V9M9 18v-5M14 18V6M19 18v-8" />
+						</svg>
+						<span data-i18n="nav.sim">Симулятор пакетов</span>
+					</button>
+					<button type="button" class="nav__item" data-view="hist">
+						<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+							<circle cx="12" cy="12" r="8.5" />
+							<path d="M12 7.5V12l3 2" />
+						</svg>
+						<span data-i18n="nav.hist">История</span>
+						<span class="nav__count" id="navHistCount"></span>
+					</button>
+					<button type="button" class="nav__item" data-view="faq">
+						<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+							<path d="M9.5 9a2.5 2.5 0 113.5 2.3c-.7.4-1 .9-1 1.7v.5M12 17v.01" />
+							<circle cx="12" cy="12" r="8.5" />
+						</svg>
+						<span data-i18n="nav.faq">FAQ</span>
+					</button>
+				</nav>
+
+				<div class="side__note">
+					<span class="side__dot" aria-hidden="true"></span>
+					<p data-i18n="side.note">
+						Ключи создаются на сервере по запросу и не пишутся на диск.
 					</p>
 				</div>
-			</div>
+			</aside>
 
-			<!-- ------------------------------- OUTPUT ------------------------------- -->
-			<aside class="output">
-				<div class="card card--output">
-					<div class="tabs" role="tablist">
-						<button class="tab is-active" data-tab="amneziawg" role="tab">AmneziaWG</button>
-						<button class="tab" data-tab="wireguard" role="tab">WireGuard</button>
-						<button class="tab" data-tab="json" role="tab">JSON</button>
+			<div class="views">
+				<!-- =============================== GENERATOR ======================== -->
+				<section class="view is-active" id="view-gen">
+					<div class="hero">
+						<div class="hero__text">
+							<h1 data-i18n="hero.title">Чертёж конфига, а не кнопка «сгенерировать»</h1>
+							<p data-i18n="hero.lead">
+								Каждое число в конфиге можно раскрыть: откуда взята граница,
+								кто его читает и что сломается, если стороны разойдутся.
+							</p>
+						</div>
+						<div class="engines">
+							<div class="engine engine--ok">
+								<span class="engine__tag" data-i18n="hero.warpTag">работает с WARP</span>
+								<strong>Cloudflare WARP</strong>
+								<p data-i18n="hero.warpDesc">
+									Это обычный WireGuard. Допустим только junk-мусор Jc/Jmin/Jmax.
+								</p>
+							</div>
+							<div class="engine engine--warn">
+								<span class="engine__tag" data-i18n="hero.awgTag">только свой сервер</span>
+								<strong>AmneziaWG</strong>
+								<p data-i18n="hero.awgDesc">
+									S1/S2, H1–H4 и мимикрия под протокол. WARP такое рукопожатие отвергнет.
+								</p>
+							</div>
+						</div>
 					</div>
 
-					<div class="output__body">
-						<div class="empty" id="emptyState">
-							<div class="empty__icon" aria-hidden="true">
-								<svg viewBox="0 0 48 48" width="44" height="44" fill="none" stroke="currentColor" stroke-width="1.6">
-									<rect x="8" y="6" width="32" height="36" rx="4" />
-									<path d="M15 17h18M15 24h18M15 31h11" stroke-linecap="round" />
-								</svg>
+					<div class="layout">
+						<div class="controls">
+							<section class="card">
+								<div class="card__head">
+									<h2 data-i18n="loc.title">Локация</h2>
+									<button class="btn btn--ghost btn--sm" id="scanBtn" type="button" data-i18n="loc.scan">
+										Сканировать дата-центры
+									</button>
+								</div>
+
+								<div class="note note--info" id="localityNote">
+									<p id="localitySummary"></p>
+									<details>
+										<summary data-i18n="loc.why">Почему нет выпадающего списка стран</summary>
+										<ul id="localityDetails"></ul>
+									</details>
+								</div>
+
+								<div class="note note--warn" id="serverlessNote" hidden>
+									<p id="serverlessNoteText"></p>
+								</div>
+
+								<div class="note" id="viewerNote" hidden>
+									<p id="viewerColoText"></p>
+								</div>
+
+								<div id="scanPanel" hidden>
+									<div class="scan__status" id="scanStatus"></div>
+									<div class="scan__list" id="scanList"></div>
+								</div>
+
+								<div class="grid grid--2">
+									<label class="field">
+										<span class="field__label" data-i18n="loc.prefix">Префикс endpoint</span>
+										<select id="endpointPrefix"></select>
+										<span class="field__hint" id="prefixHint"></span>
+									</label>
+
+									<label class="field">
+										<span class="field__label" data-i18n="loc.port">UDP-порт</span>
+										<select id="endpointPort"></select>
+										<span class="field__hint" id="portHint"></span>
+									</label>
+								</div>
+
+								<label class="field">
+									<span class="field__label">
+										<span data-i18n="loc.pin">Закрепить точный endpoint</span>
+										<span class="field__opt" data-i18n="common.optional">необязательно</span>
+									</span>
+									<input id="endpointHost" type="text" placeholder="162.159.193.10:2408" autocomplete="off" spellcheck="false" />
+									<span class="field__hint" data-i18n="loc.pinHint">Переопределяет префикс и порт выше.</span>
+								</label>
+
+								<label class="check">
+									<input type="checkbox" id="detectLocation" checked />
+									<span>
+										<span data-i18n="loc.measure">Измерить реальный дата-центр выхода после генерации</span>
+										<em data-i18n="loc.measureHint">Добавляет около секунды, зато показывает, где вы реально выходите.</em>
+									</span>
+								</label>
+							</section>
+
+							<section class="card">
+								<div class="card__head">
+									<h2 data-i18n="obf.title">Обфускация</h2>
+									<button class="btn btn--ghost btn--sm" id="rerollBtn" type="button" data-i18n="obf.reroll">
+										Перегенерировать
+									</button>
+								</div>
+
+								<div class="note note--warn" id="compatNote" hidden>
+									<p id="compatNoteText"></p>
+								</div>
+
+								<div class="profiles" id="profiles" role="radiogroup" aria-label="Obfuscation profile"></div>
+
+								<div class="mimicry" id="mimicryWrap" hidden>
+									<div class="params__head">
+										<h3 data-i18n="mim.title">Под какой протокол маскироваться</h3>
+										<span class="pill pill--muted">AWG 1.5</span>
+									</div>
+									<p class="field__hint" data-i18n="mim.intro">
+										Первые пакеты туннеля будут выглядеть как выбранный протокол. Выберите до пяти.
+									</p>
+
+									<div class="sigs" id="mimicrySignatures"></div>
+
+									<div class="grid grid--2">
+										<label class="field">
+											<span class="field__label" data-i18n="mim.domain">Домен для подстановки (SNI)</span>
+											<select id="mimicryDomain"></select>
+											<span class="field__hint" id="mimicryDomainHint"></span>
+										</label>
+
+										<label class="field">
+											<span class="field__label">
+												<span data-i18n="mim.custom">Свой домен</span>
+												<span class="field__opt" data-i18n="common.optional">необязательно</span>
+											</span>
+											<input id="mimicryDomainCustom" type="text" placeholder="example.com" spellcheck="false" autocomplete="off" />
+											<span class="field__hint" data-i18n="mim.customHint">Перебивает выбор слева.</span>
+										</label>
+									</div>
+								</div>
+
+								<div class="params" id="paramsPanel">
+									<div class="params__head">
+										<h3 data-i18n="obf.params">Сгенерированные параметры</h3>
+										<span class="pill pill--muted" id="awgVersion"></span>
+									</div>
+									<dl class="params__list" id="paramsList"></dl>
+									<button class="btn btn--ghost btn--sm" type="button" id="toParams" data-i18n="obf.explain">
+										Разобрать каждое число →
+									</button>
+								</div>
+
+								<details class="advanced" id="advancedWrap">
+									<summary data-i18n="obf.manual">Править параметры вручную</summary>
+									<p class="advanced__warn" id="advancedWarn"></p>
+									<div class="grid grid--3" id="overrideGrid"></div>
+									<div class="validation" id="validation"></div>
+								</details>
+
+								<label class="field">
+									<span class="field__label">
+										<span data-i18n="obf.seed">Seed</span>
+										<span class="field__opt" data-i18n="obf.seedOpt">воспроизводит профиль</span>
+									</span>
+									<input id="seed" type="text" data-i18n-ph="obf.seedPh" placeholder="оставьте пустым для нового" spellcheck="false" autocomplete="off" />
+									<span class="field__hint" data-i18n="obf.seedHint">Вставьте прошлый seed, чтобы получить точно такую же обфускацию на другом устройстве.</span>
+								</label>
+							</section>
+
+							<section class="card">
+								<div class="card__head"><h2 data-i18n="net.title">Сеть</h2></div>
+
+								<div class="grid grid--2">
+									<label class="field">
+										<span class="field__label" data-i18n="net.routing">Маршрутизация</span>
+										<select id="allowedIps"></select>
+										<span class="field__hint" id="allowedHint"></span>
+									</label>
+
+									<label class="field">
+										<span class="field__label">DNS</span>
+										<select id="dns"></select>
+									</label>
+
+									<label class="field">
+										<span class="field__label" data-i18n="net.mtu">MTU канала</span>
+										<select id="pathMtu"></select>
+										<span class="field__hint" id="mtuHint"></span>
+									</label>
+
+									<label class="field">
+										<span class="field__label" data-i18n="net.keepalive">Keepalive (секунды)</span>
+										<input id="keepalive" type="number" min="0" max="600" value="25" />
+										<span class="field__hint" data-i18n="net.keepaliveHint">0 отключает. 25 держит NAT открытым на мобильном.</span>
+									</label>
+								</div>
+
+								<label class="check">
+									<input type="checkbox" id="ipv6" checked />
+									<span>
+										<span data-i18n="net.ipv6">Включить IPv6</span>
+										<em data-i18n="net.ipv6Hint">Выключите, если у провайдера IPv6 сломан или течёт.</em>
+									</span>
+								</label>
+								<label class="check">
+									<input type="checkbox" id="presharedKey" />
+									<span>
+										<span data-i18n="net.psk">Добавить pre-shared key</span>
+										<em data-i18n="net.pskHint">Дополнительный симметричный слой. Для WARP необязателен.</em>
+									</span>
+								</label>
+							</section>
+
+							<section class="card">
+								<div class="card__head"><h2 data-i18n="id.title">Идентичность</h2></div>
+								<label class="field">
+									<span class="field__label">
+										<span data-i18n="id.privateKey">Существующий приватный ключ</span>
+										<span class="field__opt" data-i18n="common.optional">необязательно</span>
+									</span>
+									<input id="privateKey" type="text" data-i18n-ph="id.privateKeyPh" placeholder="base64, 44 символа" spellcheck="false" autocomplete="off" />
+									<span class="field__hint" data-i18n="id.privateKeyHint">Переиспользуйте ключ, чтобы пересобрать конфиг, не меняя идентичность.</span>
+								</label>
+								<label class="field">
+									<span class="field__label">
+										<span data-i18n="id.license">Лицензия WARP+</span>
+										<span class="field__opt" data-i18n="common.optional">необязательно</span>
+									</span>
+									<input id="license" type="text" placeholder="xxxxxxxx-xxxxxxxx-xxxxxxxx" spellcheck="false" autocomplete="off" />
+								</label>
+							</section>
+
+							<div class="actions">
+								<button class="btn btn--primary btn--lg" id="generateBtn" type="button" data-i18n="action.generate">
+									Сгенерировать конфиг
+								</button>
+								<p class="actions__hint" data-i18n="action.hint">
+									Регистрирует новое устройство в Cloudflare и собирает конфиг. Ключи не покидают память сервера.
+								</p>
 							</div>
-							<h3 data-i18n="out.empty">Конфига пока нет</h3>
-							<p data-i18n="out.emptyHint">Выберите настройки и нажмите «Сгенерировать конфиг».</p>
 						</div>
 
-						<pre class="code" id="configOut" hidden><code></code></pre>
-					</div>
+						<aside class="output">
+							<div class="card card--output">
+								<div class="tabs" role="tablist">
+									<button class="tab is-active" data-tab="amneziawg" role="tab">AmneziaWG</button>
+									<button class="tab" data-tab="wireguard" role="tab">WireGuard</button>
+									<button class="tab" data-tab="json" role="tab">JSON</button>
+								</div>
 
-					<div class="output__foot" id="outputFoot" hidden>
-						<button class="btn btn--ghost btn--sm" id="copyBtn" type="button" data-i18n="out.copy">Копировать</button>
-						<button class="btn btn--ghost btn--sm" id="downloadBtn" type="button" data-i18n="out.download">Скачать</button>
-						<span class="output__file" id="fileName"></span>
-					</div>
-				</div>
+								<div class="output__body">
+									<div class="empty" id="emptyState">
+										<div class="empty__icon" aria-hidden="true">
+											<svg viewBox="0 0 48 48" width="44" height="44" fill="none" stroke="currentColor" stroke-width="1.6">
+												<rect x="8" y="6" width="32" height="36" rx="4" />
+												<path d="M15 17h18M15 24h18M15 31h11" stroke-linecap="round" />
+											</svg>
+										</div>
+										<h3 data-i18n="out.empty">Конфига пока нет</h3>
+										<p data-i18n="out.emptyHint">Выберите настройки и нажмите «Сгенерировать конфиг».</p>
+									</div>
 
-				<div class="card summary" id="summaryCard" hidden>
-					<h3 data-i18n="out.result">Результат</h3>
-					<dl class="summary__list" id="summaryList"></dl>
-					<div id="warnList"></div>
-				</div>
-			</aside>
-		</main>
+									<pre class="code" id="configOut" hidden><code></code></pre>
+								</div>
+
+								<div class="output__foot" id="outputFoot" hidden>
+									<button class="btn btn--ghost btn--sm" id="copyBtn" type="button" data-i18n="out.copy">Копировать</button>
+									<button class="btn btn--ghost btn--sm" id="downloadBtn" type="button" data-i18n="out.download">Скачать</button>
+									<span class="output__file" id="fileName"></span>
+								</div>
+							</div>
+
+							<div class="card summary" id="summaryCard" hidden>
+								<h3 data-i18n="out.result">Результат</h3>
+								<dl class="summary__list" id="summaryList"></dl>
+								<div id="warnList"></div>
+							</div>
+						</aside>
+					</div>
+				</section>
+
+				<!-- ============================ PARAM BREAKDOWN ===================== -->
+				<section class="view" id="view-params" hidden>
+					<div class="viewhead">
+						<h1 data-i18n="pdoc.title">Разбор параметров</h1>
+						<p data-i18n="pdoc.lead">
+							У каждого параметра: значение, кто его читает, откуда взята граница
+							и что произойдёт, если на сервере он окажется другим.
+						</p>
+					</div>
+					<div class="legend">
+						<span class="tagd tagd--gen" data-i18n="pdoc.tagGen">сгенерирован</span>
+						<span class="tagd tagd--man" data-i18n="pdoc.tagMan">задан вручную</span>
+						<span class="tagd tagd--off" data-i18n="pdoc.tagOff">выключен намеренно</span>
+					</div>
+					<div class="pdoc" id="pdocList"></div>
+				</section>
+
+				<!-- ============================== SIMULATOR ========================= -->
+				<section class="view" id="view-sim" hidden>
+					<div class="viewhead">
+						<h1 data-i18n="sim.title">Симулятор пакетов</h1>
+						<p data-i18n="sim.lead">
+							Как выглядит начало сессии в проводе: сначала мусорные пакеты,
+							потом настоящее рукопожатие, потом данные.
+						</p>
+					</div>
+					<div class="card">
+						<div class="card__head">
+							<h2 data-i18n="sim.wire">Поток на проводе</h2>
+							<span class="pill pill--muted" id="simProfile"></span>
+						</div>
+						<div class="sim" id="simWire"></div>
+						<div class="simlegend">
+							<span><i class="sw sw--junk"></i><span data-i18n="sim.junk">junk-мусор</span></span>
+							<span><i class="sw sw--init"></i><span data-i18n="sim.init">handshake initiation</span></span>
+							<span><i class="sw sw--resp"></i><span data-i18n="sim.resp">handshake response</span></span>
+							<span><i class="sw sw--data"></i><span data-i18n="sim.data">данные</span></span>
+						</div>
+						<div class="note note--info"><p id="simNote"></p></div>
+					</div>
+					<div class="card">
+						<div class="card__head"><h2 data-i18n="sim.fp">Отпечаток, от которого уходим</h2></div>
+						<div class="sim sim--cmp" id="simPlain"></div>
+						<p class="field__hint" data-i18n="sim.fpHint">
+							Чистый WireGuard: 148 байт, затем 92. Две фиксированные величины подряд —
+							этого достаточно, чтобы опознать протокол по первым двум пакетам.
+						</p>
+					</div>
+				</section>
+
+				<!-- =============================== HISTORY ========================== -->
+				<section class="view" id="view-hist" hidden>
+					<div class="viewhead">
+						<h1 data-i18n="hist.title">История</h1>
+						<p data-i18n="hist.lead">
+							Seed каждой генерации хранится в этом браузере. По seed конфиг
+							воспроизводится побайтово — приватные ключи здесь не сохраняются.
+						</p>
+					</div>
+					<div class="card">
+						<div class="card__head">
+							<h2 data-i18n="hist.saved">Сохранённые сборки</h2>
+							<span class="histact">
+								<button class="btn btn--ghost btn--sm" type="button" id="histExport" data-i18n="hist.export">Экспорт в файл</button>
+								<button class="btn btn--ghost btn--sm" type="button" id="histClear" data-i18n="hist.clear">Очистить</button>
+							</span>
+						</div>
+						<div class="hist" id="histList"></div>
+					</div>
+				</section>
+
+				<!-- ================================= FAQ =========================== -->
+				<section class="view" id="view-faq" hidden>
+					<div class="viewhead">
+						<h1 data-i18n="faq.title">FAQ</h1>
+						<p data-i18n="faq.lead">
+							Ответы на то, из-за чего конфиг обычно не поднимается.
+						</p>
+					</div>
+					<div class="faq" id="faqList"></div>
+				</section>
+			</div>
+		</div>
 
 		<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
