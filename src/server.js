@@ -34,6 +34,17 @@ import { WarpApiError, isMockMode } from "./core/warp.js"
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PUBLIC_DIR = path.resolve(__dirname, "../public")
 
+// Serverless platforms answer from their own region, which quietly invalidates
+// any latency or location measurement taken on the server side.
+const SERVERLESS = Boolean(
+	process.env.VERCEL ||
+		process.env.AWS_LAMBDA_FUNCTION_NAME ||
+		process.env.NETLIFY ||
+		process.env.FUNCTIONS_WORKER_RUNTIME,
+)
+const SERVERLESS_REGION =
+	process.env.VERCEL_REGION || process.env.AWS_REGION || null
+
 const PORT = Number(process.env.PORT || 8787)
 const HOST = process.env.HOST || "0.0.0.0"
 
@@ -148,6 +159,10 @@ const routes = {
 		mock: isMockMode(),
 		node: process.version,
 		uptimeSeconds: Math.round(process.uptime()),
+		// The UI needs this to explain why a hosted scan reports the hosting
+		// region instead of the visitor's own nearest datacenter.
+		serverless: SERVERLESS,
+		region: SERVERLESS_REGION,
 	}),
 
 	"GET /api/options": async () => ({

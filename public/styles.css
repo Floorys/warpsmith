@@ -1,44 +1,40 @@
 :root {
-	--text: #2c2c2b;
-	--text-2: #7d7a75;
-	--canvas: #ffffff;
-	--surface: #f9f8f7;
-	--surface-2: #f0efed;
-	--border: #e6e5e3;
-	--accent: #2783de;
-	--accent-soft: #e5f2fc;
-	--green: #46a171;
-	--green-soft: #e8f1ec;
-	--orange: #d5803b;
-	--orange-soft: #fbebde;
-	--red: #e56458;
-	--red-soft: #fce9e7;
-	--radius: 8px;
-	--radius-lg: 12px;
+	/* Organic dark violet. Deep plum canvas, lilac accent, warm signal colours.
+	   There is deliberately no light-mode override: the palette *is* the design,
+	   and a half-hearted light twin would undo it. */
+	--text: #f1ecff;
+	--text-2: rgba(226, 216, 255, 0.62);
+	--canvas: #130f1e;
+	--surface: #1c1631;
+	--surface-2: #251e40;
+	--border: rgba(188, 160, 255, 0.16);
+	--border-strong: rgba(188, 160, 255, 0.32);
+	--accent: #a482ff;
+	--accent-strong: #8d61f7;
+	--accent-soft: rgba(164, 130, 255, 0.14);
+	/* Text that sits on top of the accent colour. */
+	--on-accent: #150f26;
+	/* Inputs, buttons and pickers: a translucent lift instead of a flat fill, so
+	   the violet gradient shows through every control. */
+	--field: rgba(255, 255, 255, 0.04);
+	--field-hover: rgba(255, 255, 255, 0.07);
+	--green: #7fd7a6;
+	--green-soft: rgba(127, 215, 166, 0.13);
+	--orange: #e7ab6d;
+	--orange-soft: rgba(231, 171, 109, 0.13);
+	--red: #f3837d;
+	--red-soft: rgba(243, 131, 125, 0.13);
+	/* Generous curvature is what reads as organic rather than boxy. */
+	--radius: 14px;
+	--radius-lg: 24px;
 	--mono: Menlo, Consolas, "SF Mono", "Liberation Mono", monospace;
 	--sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
 		Arial, sans-serif;
-	--shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 4px 12px rgba(0, 0, 0, 0.04);
-}
-
-@media (prefers-color-scheme: dark) {
-	:root {
-		--text: #ffffff;
-		--text-2: rgba(255, 255, 255, 0.65);
-		--canvas: #191919;
-		--surface: #202020;
-		--surface-2: #383836;
-		--border: rgba(255, 255, 255, 0.2);
-		--accent: #5e9fe8;
-		--accent-soft: rgba(94, 159, 232, 0.12);
-		--green: #72bc8f;
-		--green-soft: rgba(114, 188, 143, 0.12);
-		--orange: #de9255;
-		--orange-soft: rgba(222, 146, 85, 0.12);
-		--red: #e97366;
-		--red-soft: rgba(233, 115, 102, 0.12);
-		--shadow: none;
-	}
+	/* Shadows carry a violet tint so nothing looks like a grey drop shadow. */
+	--shadow: 0 2px 4px rgba(9, 5, 20, 0.45),
+		0 22px 48px -20px rgba(96, 52, 190, 0.55);
+	--glow: 0 0 0 1px rgba(164, 130, 255, 0.28),
+		0 0 32px -8px rgba(164, 130, 255, 0.45);
 }
 
 * {
@@ -56,7 +52,19 @@ body {
 	font-size: 16px;
 	line-height: 1.5;
 	color: var(--text);
-	background: var(--canvas);
+	/* Three soft blobs instead of a flat fill. The background breathes, and the
+	   translucent cards pick up a slightly different tint depending on where
+	   they sit on the page. */
+	background-color: var(--canvas);
+	background-image: radial-gradient(
+			62% 52% at 12% -8%,
+			rgba(142, 92, 255, 0.24),
+			transparent 70%
+		),
+		radial-gradient(46% 46% at 96% 8%, rgba(214, 110, 255, 0.16), transparent 72%),
+		radial-gradient(58% 58% at 48% 112%, rgba(88, 60, 190, 0.22), transparent 70%);
+	background-attachment: fixed;
+	background-repeat: no-repeat;
 	-webkit-font-smoothing: antialiased;
 }
 
@@ -70,7 +78,10 @@ body {
 
 .topbar {
 	border-bottom: 1px solid var(--border);
-	background: var(--canvas);
+	/* Translucent + blurred so the gradient keeps moving underneath it. */
+	background: rgba(19, 15, 30, 0.72);
+	backdrop-filter: blur(18px);
+	-webkit-backdrop-filter: blur(18px);
 	position: sticky;
 	top: 0;
 	z-index: 20;
@@ -180,8 +191,17 @@ body {
 .card {
 	border: 1px solid var(--border);
 	border-radius: var(--radius-lg);
-	background: var(--canvas);
-	padding: 24px;
+	/* Slightly transparent, slightly gradient: gives the surface depth without
+	   adding a single extra element to the markup. */
+	background: linear-gradient(
+		180deg,
+		rgba(40, 32, 68, 0.82),
+		rgba(24, 18, 45, 0.86)
+	);
+	backdrop-filter: blur(14px);
+	-webkit-backdrop-filter: blur(14px);
+	box-shadow: var(--shadow);
+	padding: 26px;
 }
 
 .card__head {
@@ -249,7 +269,7 @@ select {
 	font-family: inherit;
 	font-size: 14px;
 	color: var(--text);
-	background: var(--canvas);
+	background: var(--field);
 	border: 1px solid var(--border);
 	border-radius: var(--radius);
 	padding: 10px 12px;
@@ -338,7 +358,7 @@ summary:focus-visible {
 	border: 1px solid var(--border);
 	border-radius: var(--radius);
 	overflow: hidden;
-	background: var(--canvas);
+	background: var(--field);
 }
 .lang__btn {
 	border: 0;
@@ -356,7 +376,7 @@ summary:focus-visible {
 }
 .lang__btn.is-active {
 	background: var(--accent);
-	color: #fff;
+	color: var(--on-accent);
 }
 
 /* -------------------------- profiles + mimicry -------------------------- */
@@ -401,7 +421,7 @@ summary:focus-visible {
 	padding: 9px 10px;
 	border: 1px solid var(--border);
 	border-radius: var(--radius);
-	background: var(--canvas);
+	background: var(--field);
 	cursor: pointer;
 }
 .sig:hover {
@@ -475,7 +495,7 @@ summary:focus-visible {
 	border: 1px solid var(--border);
 	border-radius: var(--radius);
 	cursor: pointer;
-	background: var(--canvas);
+	background: var(--field);
 }
 
 .profile:hover {
@@ -718,7 +738,7 @@ summary:focus-visible {
 	padding: 10px 12px;
 	border: 1px solid var(--border);
 	border-radius: var(--radius);
-	background: var(--canvas);
+	background: var(--field);
 	cursor: pointer;
 	text-align: left;
 	font: inherit;
@@ -774,7 +794,7 @@ summary:focus-visible {
 	font-weight: 500;
 	border-radius: var(--radius);
 	border: 1px solid var(--border);
-	background: var(--canvas);
+	background: var(--field);
 	color: var(--text);
 	padding: 10px 16px;
 	min-height: 44px;
@@ -795,14 +815,17 @@ summary:focus-visible {
 }
 
 .btn--primary {
-	background: var(--accent);
-	border-color: var(--accent);
-	color: #fff;
+	background: linear-gradient(180deg, var(--accent), var(--accent-strong));
+	border-color: transparent;
+	color: var(--on-accent);
+	font-weight: 600;
+	box-shadow: 0 10px 24px -12px rgba(141, 97, 247, 0.9);
 }
 
 .btn--primary:hover:not(:disabled) {
-	background: #1f6fbd;
-	border-color: #1f6fbd;
+	background: linear-gradient(180deg, #b493ff, var(--accent));
+	border-color: transparent;
+	box-shadow: 0 12px 30px -12px rgba(164, 130, 255, 1);
 }
 
 .btn--lg {
@@ -879,7 +902,7 @@ summary:focus-visible {
 .tab.is-active {
 	color: var(--accent);
 	border-bottom-color: var(--accent);
-	background: var(--canvas);
+	background: var(--field);
 }
 
 .output__body {
@@ -1074,5 +1097,125 @@ summary:focus-visible {
 
 	.param__what {
 		grid-column: 1;
+	}
+}
+
+/* ----------------------- Organic polish (violet theme) ------------------- */
+
+/* Soft, slightly slow motion is a big part of why a theme feels organic
+   rather than mechanical. Everything opts out under reduced-motion below. */
+.card,
+.btn,
+.profile,
+.sig,
+.loc,
+.tab,
+.lang__btn,
+input[type="text"],
+input[type="number"],
+select {
+	transition: background 0.18s ease, border-color 0.18s ease,
+		box-shadow 0.22s ease, transform 0.18s ease;
+}
+
+.btn:hover:not(:disabled) {
+	background: var(--field-hover);
+	border-color: var(--border-strong);
+}
+
+/* A card lifts a little when you interact with anything inside it. */
+.profile:hover,
+.sig:hover,
+.loc:hover {
+	border-color: var(--border-strong);
+	transform: translateY(-1px);
+}
+
+.profile.is-active,
+.sig.is-active {
+	border-color: var(--accent);
+	box-shadow: var(--glow);
+}
+
+input[type="text"]:hover,
+input[type="number"]:hover,
+select:hover {
+	border-color: var(--border-strong);
+}
+
+input:focus-visible,
+select:focus-visible,
+button:focus-visible,
+summary:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+/* Selection and scrollbar in-theme: the two details that most often give a
+   dark redesign away as a half-finished recolour. */
+::selection {
+	background: rgba(164, 130, 255, 0.32);
+	color: var(--text);
+}
+
+* {
+	scrollbar-width: thin;
+	scrollbar-color: rgba(164, 130, 255, 0.35) transparent;
+}
+
+::-webkit-scrollbar {
+	width: 10px;
+	height: 10px;
+}
+
+::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+	background: rgba(164, 130, 255, 0.3);
+	border-radius: 999px;
+	border: 2px solid transparent;
+	background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+	background: rgba(164, 130, 255, 0.5);
+	background-clip: content-box;
+}
+
+/* The generated config is the hero of the page, so give it its own inset
+   surface rather than letting it sit flat on the card. */
+.output__body {
+	background: rgba(10, 6, 20, 0.45);
+	border-radius: var(--radius);
+}
+
+.code .c-key {
+	color: var(--green);
+}
+
+.code .c-section {
+	color: var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.card,
+	.btn,
+	.profile,
+	.sig,
+	.loc,
+	.tab,
+	.lang__btn,
+	input[type="text"],
+	input[type="number"],
+	select {
+		transition: none;
+	}
+
+	.profile:hover,
+	.sig:hover,
+	.loc:hover {
+		transform: none;
 	}
 }

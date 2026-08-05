@@ -451,9 +451,11 @@ export function probeLatency(host, port = 443, options = {}) {
  * @returns {Promise<{ scanned: number, results: Object[], byLocation: Object[] }>}
  */
 export async function scanLocations(options = {}) {
-	const perPrefix = Math.min(Math.max(options.perPrefix ?? 2, 1), 8)
-	const concurrency = Math.min(Math.max(options.concurrency ?? 8, 1), 24)
-	const timeoutMs = options.timeoutMs ?? 4000
+	// Defaults are deliberately generous: a thin scan makes anycast look broken
+	// when it is merely doing its job.
+	const perPrefix = Math.min(Math.max(options.perPrefix ?? 4, 1), 12)
+	const concurrency = Math.min(Math.max(options.concurrency ?? 12, 1), 32)
+	const timeoutMs = options.timeoutMs ?? 5000
 	const rng = createRng(options.seed)
 
 	/** @type {string[]} */
@@ -493,10 +495,27 @@ export async function scanLocations(options = {}) {
 		g.bestRttMs = Math.min(g.bestRttMs, r.rttMs)
 	}
 
+	// Without these counters a scan that mostly timed out looks identical to a
+	// scan where every endpoint answered from one datacenter. Those are very
+	// different situations and the UI must be able to tell them apart.
+	const failed = results.filter((r) => !r.ok)
+	const timedOut = failed.filter((r) => /timeout/i.test(r.error || "")).length
+
 	return {
 		scanned: results.length,
 		results,
 		byLocation: [...groups.values()].sort((a, b) => a.bestRttMs - b.bestRttMs),
+		stats: {
+			probes: results.length,
+			answered: ok.length,
+			failed: failed.length,
+			timedOut,
+			blocked: failed.length - timedOut,
+			uniqueColos: groups.size,
+			// True when everything answered but landed in one place. That is normal
+			// anycast behaviour from a single vantage point, not a failure.
+			singleColo: groups.size === 1 && ok.length > 1,
+		},
 	}
 }
 
@@ -512,6 +531,8 @@ export function describeLocationReality() {
 			"Every endpoint below is announced from hundreds of Cloudflare datacenters simultaneously.",
 			"Switching prefix or port does often change which datacenter you reach, because ISPs route prefixes differently.",
 			"Scan endpoints to see the datacenter (colo) you actually land in, measured live, plus RTT.",
+			"Finding only ONE datacenter is the normal result: from a single vantage point anycast sends every Cloudflare IP to the same nearest colo.",
+			"The scan runs on the server. If this site is hosted (Vercel, Render, a VPS), it measures the hosting region, not your ISP. Run it locally for your own numbers.",
 			"For a guaranteed country you need WARP+/Zero Trust with a dedicated egress, or your own AmneziaWG server there.",
 		],
 	}

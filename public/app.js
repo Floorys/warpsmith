@@ -37,6 +37,16 @@ const I18N = {
 		"scan.found": "Доступно дата-центров: {n} из {total} проверок. Нажмите, чтобы закрепить.",
 		"scan.unknown": "Неизвестный центр {colo}",
 		"scan.pinned": "Закреплён {ep} ({city})",
+		"scan.single":
+			"Все {answered} ответивших endpoint'ов пришли из одного дата-центра ({colo}). Это нормальный результат: anycast с одной точки всегда ведёт в ближайший колокейшн.",
+		"scan.failed": "Не ответили: {failed} (таймаут или блокировка).",
+		"viewer.checking": "Определяю ваш дата-центр прямо из браузера…",
+		"viewer.ok":
+			"Ваш браузер выходит через {colo} — {city}, {country}. Вот в какой дата-центр вас направляет ваш провайдер; именно это число имеет значение, а не результат скана с сервера.",
+		"viewer.fail":
+			"Не удалось определить ваш дата-центр из браузера: запрос к Cloudflare заблокирован или нет сети.",
+		"srv.hosted":
+			"Сканирование выполняется на сервере{region}, поэтому оно измеряет дата-центр хостинга, а не ваш. Для своих цифр запустите генератор локально: npm start.",
 		"obf.title": "Обфускация",
 		"obf.reroll": "Перегенерировать",
 		"obf.params": "Сгенерированные параметры",
@@ -122,6 +132,16 @@ const I18N = {
 		"scan.found": "{n} datacenter(s) reachable, from {total} probes. Click one to pin it.",
 		"scan.unknown": "Unknown colo {colo}",
 		"scan.pinned": "Pinned {ep} ({city})",
+		"scan.single":
+			"All {answered} responding endpoints came from one datacenter ({colo}). That is the normal result: from a single vantage point anycast always lands in the nearest colo.",
+		"scan.failed": "No answer from {failed} (timeout or blocked).",
+		"viewer.checking": "Detecting your datacenter straight from the browser…",
+		"viewer.ok":
+			"Your browser exits through {colo} — {city}, {country}. That is the datacenter your ISP routes you to, and it is the number that matters, not the server-side scan.",
+		"viewer.fail":
+			"Could not detect your datacenter from the browser: the Cloudflare request was blocked or there is no network.",
+		"srv.hosted":
+			"The scan runs on the server{region}, so it measures the hosting datacenter, not yours. Run the generator locally for your own numbers: npm start.",
 		"obf.title": "Obfuscation",
 		"obf.reroll": "Re-roll values",
 		"obf.params": "Generated parameters",
@@ -194,6 +214,9 @@ const state = {
 	result: null,
 	tab: "amneziawg",
 	busy: false,
+	health: null,
+	// undefined = not measured yet, null = measurement failed, object = colo meta
+	viewerColo: undefined,
 }
 
 /** Translate a key, interpolating {placeholders}. */
@@ -301,6 +324,11 @@ function setLanguage(lang) {
 	localStorage.setItem("awg-lang", lang)
 	applyStaticI18n()
 
+	// These two are driven by measurements, not by options, so they must be
+	// re-rendered even before the options request has landed.
+	renderServerlessNote()
+	renderViewerColo()
+
 	const options = state.options
 	if (!options) return
 
@@ -347,6 +375,11 @@ async function init() {
 		$("healthBadge").textContent = t("badge.ready")
 		$("healthBadge").className = "pill pill--ok"
 		$("mockBadge").hidden = !health.mock
+		state.health = health
+		renderServerlessNote()
+		// Fire and forget: the browser measurement is the honest one, but it must
+		// never block the rest of the UI from booting.
+		detectViewerColo()
 
 		renderLocality(options.locationReality)
 		renderPrefixes(options.endpointPrefixes)
@@ -728,6 +761,76 @@ function renderValidation(validation) {
 	}
 }
 
+// -------------------------------------------------------- vantage point
+
+/**
+ * Warn that a hosted deployment measures its own region, not the visitor's.
+ * This is the whole reason a Vercel deployment keeps reporting one datacenter
+ * on the other side of the planet.
+ */
+function renderServerlessNote() {
+	const health = state.health
+	if (!health?.serverless) {
+		$("serverlessNote").hidden = true
+		return
+	}
+	$("serverlessNote").hidden = false
+	$("serverlessNoteText").textContent = t("srv.hosted", {
+		region: health.region ? ` (${health.region})` : "",
+	})
+}
+
+/**
+ * Ask Cloudflare, from the visitor's own browser, which colo it lands in.
+ * The server cannot answer this: it would only ever report its own routing.
+ */
+function renderViewerColo() {
+	const note = $("viewerNote")
+	const text = $("viewerColoText")
+	const meta = state.viewerColo
+
+	if (meta === undefined) {
+		note.hidden = false
+		text.textContent = t("viewer.checking")
+		return
+	}
+	if (meta === null) {
+		note.hidden = false
+		text.textContent = t("viewer.fail")
+		return
+	}
+	note.hidden = false
+	text.textContent = t("viewer.ok", {
+		colo: meta.colo,
+		city: meta.city || meta.colo,
+		country: meta.country || "?",
+	})
+}
+
+async function detectViewerColo() {
+	state.viewerColo = undefined
+	renderViewerColo()
+
+	try {
+		const controller = new AbortController()
+		const timer = setTimeout(() => controller.abort(), 6000)
+		const response = await fetch("https://speed.cloudflare.com/meta", {
+			signal: controller.signal,
+			cache: "no-store",
+		})
+		clearTimeout(timer)
+		if (!response.ok) throw new Error(`HTTP ${response.status}`)
+
+		const meta = await response.json()
+		if (!meta.colo) throw new Error("no colo")
+
+		state.viewerColo = meta
+	} catch {
+		state.viewerColo = null
+	}
+	renderViewerColo()
+}
+
 // -------------------------------------------------------------------- scan
 
 async function runScan() {
@@ -738,14 +841,30 @@ async function runScan() {
 	$("scanList").replaceChildren()
 
 	try {
-		const { scanned, byLocation } = await api("/api/scan", { perPrefix: 2 })
+		const { scanned, byLocation, stats } = await api("/api/scan", {
+			perPrefix: 4,
+		})
 
 		if (!byLocation.length) {
 			$("scanStatus").textContent = t("scan.none", { n: scanned })
 			return
 		}
 
-		$("scanStatus").textContent = t("scan.found", { n: byLocation.length, total: scanned })
+		// One datacenter is the expected outcome, so say so explicitly instead of
+		// letting "1 of 14" read like a broken scan.
+		const status = [t("scan.found", { n: byLocation.length, total: scanned })]
+		if (stats?.singleColo) {
+			status.push(
+				t("scan.single", {
+					answered: stats.answered,
+					colo: byLocation[0].colo,
+				}),
+			)
+		}
+		if (stats?.failed) {
+			status.push(t("scan.failed", { failed: stats.failed }))
+		}
+		$("scanStatus").textContent = status.join(" ")
 
 		for (const loc of byLocation) {
 			const best = loc.endpoints[0]
