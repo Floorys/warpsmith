@@ -69,7 +69,10 @@ body {
 }
 
 .shell {
-	max-width: 1120px;
+	/* Widened from 1120px. With a 232px section rail and a 460px output panel,
+	   the settings column was left with 300px, which is too narrow for a form
+	   this dense and made the step tabs spill out of their strip. */
+	max-width: 1320px;
 	margin: 0 auto;
 	padding: 0 32px;
 }
@@ -1056,7 +1059,10 @@ summary:focus-visible {
 
 /* ------------------------------ Responsive ------------------------------- */
 
-@media (max-width: 960px) {
+/* Collapses at 1200px rather than 960px. Between those two widths the fixed
+   460px output panel squeezed the settings column down to about 200px, which
+   pushed the step tabs into four stacked rows. */
+@media (max-width: 1200px) {
 	.layout {
 		grid-template-columns: minmax(0, 1fr);
 		gap: 24px;
@@ -1760,18 +1766,22 @@ summary:focus-visible {
 
 @media (max-width: 1080px) {
 	.hero {
-		grid-template-columns: 1fr;
+		grid-template-columns: minmax(0, 1fr);
 	}
 }
 
 @media (max-width: 960px) {
 	.app {
-		grid-template-columns: 1fr;
+		/* minmax(0, ...) rather than a bare 1fr. A 1fr track will not shrink below
+		   its content's min-content width, so the monospace config box and the
+		   section strip were dragging the whole column past the screen edge. */
+		grid-template-columns: minmax(0, 1fr);
 		gap: 20px;
 	}
 
 	.side {
 		position: static;
+		min-width: 0;
 	}
 
 	.nav {
@@ -1815,5 +1825,380 @@ summary:focus-visible {
 	.histrow {
 		flex-direction: column;
 		align-items: flex-start;
+	}
+}
+
+/* ------------------------------------------------------------------ mobile */
+
+/* Nothing here changes the desktop layout: every rule below lives inside a
+   max-width query. The goals are (1) never scroll the page sideways, (2) keep
+   tap targets at 44px, (3) stop iOS from zooming the page when a field is
+   focused, which needs a 16px font size on the input itself. */
+
+@media (max-width: 720px) {
+	body {
+		/* A fixed background repaints on every scroll frame on mobile Safari,
+		   which makes the whole page feel sticky. */
+		background-attachment: scroll;
+		/* Long seeds and config lines must not widen the page. */
+		overflow-x: hidden;
+	}
+
+	.shell {
+		padding: 0 16px;
+	}
+
+	.topbar__inner {
+		height: 56px;
+		gap: 10px;
+	}
+
+	.topbar__meta {
+		gap: 6px;
+	}
+
+	/* Finger-sized controls: the language toggles measured 26px tall and the
+	   small buttons 36px. */
+	.lang__btn {
+		min-height: 34px;
+		padding: 6px 12px;
+	}
+
+	.btn--sm {
+		min-height: 40px;
+	}
+
+	.app {
+		gap: 14px;
+	}
+
+	/* The section list becomes a scrollable strip that stays under the top bar,
+	   so switching sections never needs a scroll back up. Full Russian labels
+	   are kept -- they are too long for a five-column bottom bar. */
+	.nav {
+		position: sticky;
+		top: 56px;
+		z-index: 15;
+		flex-direction: row;
+		gap: 6px;
+		padding: 8px;
+		overflow-x: auto;
+		scroll-snap-type: x proximity;
+		-webkit-overflow-scrolling: touch;
+		overscroll-behavior-x: contain;
+		scrollbar-width: none;
+		border-radius: var(--radius);
+	}
+
+	.nav::-webkit-scrollbar {
+		display: none;
+	}
+
+	.nav__item {
+		width: auto;
+		flex: none;
+		min-height: 44px;
+		scroll-snap-align: start;
+		white-space: nowrap;
+		padding: 9px 12px;
+		font-size: 13px;
+	}
+
+	.card {
+		padding: 18px 15px;
+	}
+
+	.hero {
+		gap: 18px;
+	}
+
+	.engines {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.viewhead h1 {
+		font-size: 22px;
+	}
+
+	/* iOS zooms the viewport when a focused field is under 16px. */
+	input[type="text"],
+	input[type="number"],
+	select {
+		font-size: 16px;
+	}
+
+	.override input {
+		font-size: 15px;
+		min-height: 44px;
+	}
+
+	/* Config text stays monospaced and scrolls inside its own box only. */
+	.code {
+		padding: 15px 14px;
+		font-size: 12px;
+		overscroll-behavior-x: contain;
+		-webkit-overflow-scrolling: touch;
+	}
+
+	.output__foot {
+		flex-wrap: wrap;
+		padding: 12px 14px;
+	}
+
+	.output__foot .btn {
+		flex: 1;
+		min-width: 120px;
+	}
+
+	.output__file {
+		margin-left: 0;
+		width: 100%;
+		order: 3;
+		text-align: center;
+	}
+
+	/* Any monospace value can be an unbroken 44-character string. */
+	.pdoc__key,
+	.pdoc__val,
+	.histrow__seed,
+	.summary__list dd,
+	.loc__name {
+		overflow-wrap: anywhere;
+	}
+
+	.pdoc__head {
+		flex-wrap: wrap;
+		gap: 6px;
+	}
+
+	.simlegend {
+		gap: 10px 14px;
+	}
+
+	.toast {
+		left: 12px;
+		right: 12px;
+		bottom: 16px;
+		/* The desktop rule centres the toast with left: 50% plus a translate.
+		   Pinning both edges means that translate has to go, or the toast slides
+		   half its own width off the left of the screen. */
+		transform: none;
+		max-width: none;
+		width: auto;
+		text-align: center;
+	}
+
+	/* Nine numeric fields in one column is a very long scroll. The id beats the
+	   .grid--3 single-column rule regardless of order. */
+	#overrideGrid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 10px;
+	}
+}
+
+@media (max-width: 480px) {
+	.shell {
+		padding: 0 12px;
+	}
+
+	.card {
+		padding: 16px 13px;
+		border-radius: var(--radius);
+	}
+
+	.hero {
+		padding: 16px 14px;
+	}
+
+	.hero__text h1 {
+		font-size: 21px;
+	}
+
+	.nav__item {
+		font-size: 12.5px;
+		padding: 9px 10px;
+	}
+
+	.code {
+		font-size: 11.5px;
+	}
+
+	.simbar {
+		grid-template-columns: 70px minmax(0, 1fr) 54px;
+		gap: 7px;
+		font-size: 11.5px;
+	}
+
+	.tab {
+		font-size: 12.5px;
+		padding: 12px 4px;
+	}
+
+	.profile {
+		padding: 11px 12px;
+	}
+
+	.footer {
+		font-size: 12px;
+	}
+}
+
+/* Touch targets on anything narrower than a laptop. Measured heights before
+   this block: the manual-tuning toggle was 18px and the checkboxes 16-18px,
+   which is well under a comfortable finger. The FAQ rows already have 15px of
+   padding, so they are deliberately left alone. */
+
+@media (max-width: 900px) {
+	.advanced > summary {
+		padding: 11px 0;
+		font-size: 14px;
+	}
+
+	.check {
+		align-items: center;
+		padding: 3px 0;
+	}
+
+	.check input {
+		width: 22px;
+		height: 22px;
+		margin-top: 0;
+	}
+
+	/* The "why there is no country dropdown" disclosure has no class of its own.
+	   The advanced and FAQ rows carry more specific selectors, so they keep the
+	   padding they already have. */
+	summary {
+		padding: 10px 0;
+	}
+
+	.sig {
+		align-items: center;
+	}
+
+	.sig input {
+		width: 22px;
+		height: 22px;
+		margin-top: 0;
+	}
+
+	.btn--sm {
+		min-height: 40px;
+	}
+}
+
+/* ------------------------------------------------------------ form steps */
+
+.steps {
+	display: flex;
+	/* Wrapping rather than clipping: on a narrow window the tabs move to a
+	   second row instead of hanging outside the strip. */
+	flex-wrap: wrap;
+	gap: 6px;
+	padding: 6px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--surface);
+}
+
+.steps__btn {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	min-height: 42px;
+	padding: 8px 8px;
+	border: 0;
+	border-radius: 10px;
+	background: transparent;
+	color: var(--text-2);
+	font: inherit;
+	font-size: 13px;
+	font-weight: 500;
+	white-space: nowrap;
+	cursor: pointer;
+	transition:
+		background 0.18s ease,
+		color 0.18s ease;
+}
+
+.steps__btn:hover {
+	color: var(--text);
+	background: var(--field);
+}
+
+.steps__btn.is-active {
+	background: var(--accent-soft);
+	color: var(--text);
+}
+
+.steps__num {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	width: 18px;
+	height: 18px;
+	border-radius: 50%;
+	background: var(--field);
+	color: var(--text-2);
+	font-family: var(--mono);
+	font-size: 11px;
+}
+
+.steps__btn.is-active .steps__num {
+	background: var(--accent);
+	color: var(--on-accent);
+}
+
+/* Validation messages live inside the obfuscation group, so the tab has to
+   carry the bad news when another group is open. */
+.steps__btn.has-error .steps__num {
+	background: var(--red);
+	color: #fff;
+}
+
+.stepfoot {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.stepfoot__count {
+	font-size: 12px;
+	color: var(--text-2);
+	font-variant-numeric: tabular-nums;
+}
+
+.stepfoot .btn[disabled] {
+	opacity: 0.4;
+	cursor: not-allowed;
+}
+
+@media (max-width: 720px) {
+	/* Four Russian labels never fit on a phone, so the strip scrolls. */
+	.steps {
+		/* One scrolling row on phones, rather than wrapping into four rows. */
+		flex-wrap: nowrap;
+		overflow-x: auto;
+		scrollbar-width: none;
+		-webkit-overflow-scrolling: touch;
+		overscroll-behavior-x: contain;
+		scroll-snap-type: x proximity;
+	}
+
+	.steps::-webkit-scrollbar {
+		display: none;
+	}
+
+	.steps__btn {
+		flex: none;
+		scroll-snap-align: start;
+	}
+
+	.stepfoot .btn {
+		flex: 1;
 	}
 }

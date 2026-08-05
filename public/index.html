@@ -121,7 +121,26 @@
 
 					<div class="layout">
 						<div class="controls">
-							<section class="card">
+							<nav class="steps" id="steps">
+								<button type="button" class="steps__btn is-active" data-step="loc">
+									<span class="steps__num">1</span>
+									<span data-i18n="loc.title">Локация</span>
+								</button>
+								<button type="button" class="steps__btn" data-step="obf">
+									<span class="steps__num">2</span>
+									<span data-i18n="obf.title">Обфускация</span>
+								</button>
+								<button type="button" class="steps__btn" data-step="net">
+									<span class="steps__num">3</span>
+									<span data-i18n="net.title">Сеть</span>
+								</button>
+								<button type="button" class="steps__btn" data-step="id">
+									<span class="steps__num">4</span>
+									<span data-i18n="id.title">Идентичность</span>
+								</button>
+							</nav>
+
+							<section class="card" data-step="loc">
 								<div class="card__head">
 									<h2 data-i18n="loc.title">Локация</h2>
 									<button class="btn btn--ghost btn--sm" id="scanBtn" type="button" data-i18n="loc.scan">
@@ -182,7 +201,7 @@
 								</label>
 							</section>
 
-							<section class="card">
+							<section class="card" data-step="obf" hidden>
 								<div class="card__head">
 									<h2 data-i18n="obf.title">Обфускация</h2>
 									<button class="btn btn--ghost btn--sm" id="rerollBtn" type="button" data-i18n="obf.reroll">
@@ -253,7 +272,7 @@
 								</label>
 							</section>
 
-							<section class="card">
+							<section class="card" data-step="net" hidden>
 								<div class="card__head"><h2 data-i18n="net.title">Сеть</h2></div>
 
 								<div class="grid grid--2">
@@ -297,7 +316,7 @@
 								</label>
 							</section>
 
-							<section class="card">
+							<section class="card" data-step="id" hidden>
 								<div class="card__head"><h2 data-i18n="id.title">Идентичность</h2></div>
 								<label class="field">
 									<span class="field__label">
@@ -315,6 +334,8 @@
 									<input id="license" type="text" placeholder="xxxxxxxx-xxxxxxxx-xxxxxxxx" spellcheck="false" autocomplete="off" />
 								</label>
 							</section>
+
+							<div class="stepfoot" id="stepFoot"></div>
 
 							<div class="actions">
 								<button class="btn btn--primary btn--lg" id="generateBtn" type="button" data-i18n="action.generate">

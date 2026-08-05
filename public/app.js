@@ -1656,6 +1656,7 @@ function afterParams() {
 	try {
 		renderParamDocs()
 		renderSimulator()
+		markStepWarnings()
 	} catch {
 		// A broken side panel must never take the generator down with it.
 	}
@@ -1728,3 +1729,128 @@ showView(location.hash.slice(1) || "gen")
 import { GROUP_PARAM_DOCS } from "./param-docs.js"
 
 Object.assign(PARAM_DOCS, GROUP_PARAM_DOCS)
+
+/* ------------------------------------------------------- generator steps */
+
+/*
+ * The generator form is four groups of settings. Showing all of them at once
+ * made the page a single long scroll, so only one group is visible at a time
+ * and the numbered strip switches between them.
+ *
+ * Two deliberate choices:
+ * - The generate button lives outside the groups and stays visible on every
+ *   step, so nobody has to walk to the last tab to build a config.
+ * - Obfuscation validation errors are rendered inside the second group. If you
+ *   are standing on another step you would never see them, so the tab itself
+ *   gets a warning dot.
+ */
+
+const STEPS = ["loc", "obf", "net", "id"]
+const STEP_KEY = "awg-step"
+
+Object.assign(I18N.ru, {
+	"step.back": "Назад",
+	"step.next": "Далее",
+	"step.count": "Шаг {n} из {total}",
+	"step.hasError": "в этом разделе есть ошибка",
+})
+
+Object.assign(I18N.en, {
+	"step.back": "Back",
+	"step.next": "Next",
+	"step.count": "Step {n} of {total}",
+	"step.hasError": "this group has an error",
+})
+
+/** Only the four settings groups carry data-step; the tab buttons do too. */
+function stepCards() {
+	return document.querySelectorAll("section.card[data-step]")
+}
+
+function currentStep() {
+	return STEPS.includes(state.step) ? state.step : STEPS[0]
+}
+
+function showStep(name) {
+	const step = STEPS.includes(name) ? name : STEPS[0]
+	state.step = step
+
+	for (const card of stepCards()) {
+		card.hidden = card.dataset.step !== step
+	}
+	for (const button of document.querySelectorAll(".steps__btn")) {
+		button.classList.toggle("is-active", button.dataset.step === step)
+	}
+
+	try {
+		localStorage.setItem(STEP_KEY, step)
+	} catch {
+		// Private mode: remembering the step is a nicety, not a requirement.
+	}
+
+	renderStepFoot()
+}
+
+/** Back / Next pair plus a "Step 2 of 4" counter under the visible group. */
+function renderStepFoot() {
+	const host = $("stepFoot")
+	if (!host) return
+
+	const index = STEPS.indexOf(currentStep())
+	host.replaceChildren()
+
+	const back = el("button", "btn btn--ghost btn--sm", t("step.back"))
+	back.type = "button"
+	back.disabled = index === 0
+	back.addEventListener("click", () => showStep(STEPS[index - 1]))
+
+	const count = el("span", "stepfoot__count")
+	count.textContent = t("step.count", {
+		n: String(index + 1),
+		total: String(STEPS.length),
+	})
+
+	const next = el("button", "btn btn--sm", t("step.next"))
+	next.type = "button"
+	next.disabled = index === STEPS.length - 1
+	next.addEventListener("click", () => showStep(STEPS[index + 1]))
+
+	host.append(back, count, next)
+}
+
+/** Surface obfuscation errors on the tab, because the messages live inside it. */
+function markStepWarnings() {
+	const button = document.querySelector('.steps__btn[data-step="obf"]')
+	if (!button) return
+
+	const validation = state.obfuscation?.validation
+	const hasError = Boolean(validation && validation.errors?.length)
+	button.classList.toggle("has-error", hasError)
+	button.title = hasError ? t("step.hasError") : ""
+}
+
+function wireSteps() {
+	for (const button of document.querySelectorAll(".steps__btn")) {
+		button.addEventListener("click", () => showStep(button.dataset.step))
+	}
+
+	// "Explain every number" sits in the obfuscation group, so send people to
+	// the right step when they come back from the parameter breakdown.
+	for (const id of ["langRu", "langEn"]) {
+		$(id)?.addEventListener("click", () => {
+			renderStepFoot()
+			markStepWarnings()
+		})
+	}
+}
+
+let savedStep = null
+try {
+	savedStep = localStorage.getItem(STEP_KEY)
+} catch {
+	savedStep = null
+}
+
+wireSteps()
+showStep(savedStep || STEPS[0])
+markStepWarnings()
