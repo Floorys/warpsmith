@@ -268,7 +268,7 @@
 										<span class="field__opt" data-i18n="obf.seedOpt">воспроизводит профиль</span>
 									</span>
 									<input id="seed" type="text" data-i18n-ph="obf.seedPh" placeholder="оставьте пустым для нового" spellcheck="false" autocomplete="off" />
-									<span class="field__hint" data-i18n="obf.seedHint">Вставьте прошлый seed, чтобы получить точно такую же обфускацию на другом устройстве.</span>
+									<span class="field__hint" data-i18n="obf.seedHint">Вставьте прошлый seed, чтобы получить точно такую ��е обфускацию на другом устройстве.</span>
 								</label>
 							</section>
 
@@ -285,6 +285,8 @@
 									<label class="field">
 										<span class="field__label">DNS</span>
 										<select id="dns"></select>
+										<input id="dnsCustom" type="text" placeholder="1.1.1.1, 9.9.9.9" spellcheck="false" autocomplete="off" hidden />
+										<span class="field__hint" id="dnsHint"></span>
 									</label>
 
 									<label class="field">

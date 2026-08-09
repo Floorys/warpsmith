@@ -345,7 +345,7 @@ function setLanguage(lang) {
 	renderSignatures(options.signatures)
 	renderMimicryDomains(options.mimicryDomains)
 	renderSelect($("allowedIps"), options.allowedIps, allowed)
-	renderSelect($("dns"), options.dns, dns)
+	renderDnsSelect(options.dns, dns)
 	renderPathMtu(options.pathMtuPresets)
 
 	$("endpointPrefix").value = prefix
@@ -388,7 +388,7 @@ async function init() {
 		renderSignatures(options.signatures)
 		renderMimicryDomains(options.mimicryDomains)
 		renderSelect($("allowedIps"), options.allowedIps, "full")
-		renderSelect($("dns"), options.dns, "cloudflare")
+		renderDnsSelect(options.dns, "cloudflare")
 		renderPathMtu(options.pathMtuPresets)
 		renderOverrideFields()
 
@@ -924,7 +924,7 @@ async function generate() {
 			endpointHost: $("endpointHost").value.trim() || undefined,
 			detectLocation: $("detectLocation").checked,
 			allowedIps: $("allowedIps").value,
-			dns: $("dns").value,
+			dns: dnsValue(),
 			pathMtu: pathMtu ? Number(pathMtu) : undefined,
 			conservativeMtu: !pathMtu,
 			keepalive: Number($("keepalive").value || 0),
@@ -1854,3 +1854,123 @@ try {
 wireSteps()
 showStep(savedStep || STEPS[0])
 markStepWarnings()
+
+/* ------------------------------------------------------------------- DNS */
+
+/*
+ * The DNS picker. Three things happen here beyond listing presets:
+ *
+ * - A "custom list" entry, because the backend already accepts a comma
+ *   separated list of servers; only the UI was missing.
+ * - A hint showing the resolvers that will actually land in the config. It
+ *   follows the IPv6 checkbox, since v6 resolvers are stripped from a v4-only
+ *   tunnel and it would otherwise look like the address list was wrong.
+ * - Validation of a hand-typed list. Without it an empty field silently fell
+ *   back to Cloudflare, which is a confusing way to lose your own setting.
+ */
+
+// var, not let: init() may reach renderDnsSelect before this line is evaluated.
+var dnsPresets = []
+
+Object.assign(I18N.ru, {
+	"net.dnsCustom": "Свой список",
+	"net.dnsCustomHint": "Адреса через запятую. Только IP, имена доменов тут не работают.",
+	"net.dnsEmpty": "Укажите хотя бы один DNS-сервер",
+	"net.dnsBad": "Не похоже на IP-адрес: {list}",
+	"net.dnsV4Only": "{list} — IPv6-резолверы скрыты, IPv6 выключён",
+})
+
+Object.assign(I18N.en, {
+	"net.dnsCustom": "Custom list",
+	"net.dnsCustomHint": "Comma separated. IP addresses only, hostnames will not work here.",
+	"net.dnsEmpty": "Enter at least one DNS server",
+	"net.dnsBad": "Does not look like an IP address: {list}",
+	"net.dnsV4Only": "{list} — IPv6 resolvers hidden because IPv6 is off",
+})
+
+function renderDnsSelect(items, defaultId) {
+	const select = $("dns")
+	if (!select) return
+
+	dnsPresets = Array.isArray(items) ? items : []
+	renderSelect(select, dnsPresets, defaultId)
+	select.append(new Option(t("net.dnsCustom"), "custom"))
+
+	// renderSelect() set the value before the custom entry existed.
+	if (defaultId === "custom") select.value = "custom"
+
+	updateDnsHint()
+}
+
+function updateDnsHint() {
+	const select = $("dns")
+	const custom = $("dnsCustom")
+	const hint = $("dnsHint")
+	if (!select || !custom || !hint) return
+
+	const isCustom = select.value === "custom"
+	custom.hidden = !isCustom
+
+	if (isCustom) {
+		hint.textContent = t("net.dnsCustomHint")
+		return
+	}
+
+	const preset = dnsPresets.find((item) => item.id === select.value)
+	const servers = preset?.servers ?? []
+	const wantsV6 = Boolean($("ipv6")?.checked)
+	const shown = wantsV6 ? servers : servers.filter((s) => !s.includes(":"))
+	const hidden = servers.length - shown.length
+
+	const addresses = hidden
+		? t("net.dnsV4Only", { list: shown.join(", ") })
+		: shown.join(", ")
+
+	// Unblocking resolvers carry a note; say so instead of just listing IPs.
+	const note = preset ? pickText(preset, "note") : ""
+	hint.textContent = note ? `${addresses} · ${note}` : addresses
+	hint.classList.toggle("field__hint--warn", Boolean(note))
+}
+
+function looksLikeIp(value) {
+	if (value.includes(":")) {
+		return /^[0-9a-fA-F:]+$/.test(value) && value.split(":").length <= 9
+	}
+	const parts = value.split(".")
+	return (
+		parts.length === 4 &&
+		parts.every((part) => /^\d{1,3}$/.test(part) && Number(part) <= 255)
+	)
+}
+
+/**
+ * The value sent to /api/generate: either a preset id or a comma separated
+ * list. Throws on bad input; generate() already turns that into a toast.
+ */
+function dnsValue() {
+	const select = $("dns")
+	if (!select || select.value !== "custom") return select ? select.value : ""
+
+	const list = $("dnsCustom")
+		.value.split(",")
+		.map((item) => item.trim())
+		.filter(Boolean)
+
+	if (!list.length) throw new Error(t("net.dnsEmpty"))
+
+	const bad = list.filter((item) => !looksLikeIp(item))
+	if (bad.length) throw new Error(t("net.dnsBad", { list: bad.join(", ") }))
+
+	return list.join(",")
+}
+
+function wireDns() {
+	$("dns")?.addEventListener("change", updateDnsHint)
+	// v6 resolvers appear and disappear with this checkbox.
+	$("ipv6")?.addEventListener("change", updateDnsHint)
+	for (const id of ["langRu", "langEn"]) {
+		$(id)?.addEventListener("click", updateDnsHint)
+	}
+}
+
+wireDns()

@@ -369,7 +369,14 @@ export function describeOptions() {
 			label: p.label,
 			note: p.note,
 		})),
-		dns: Object.entries(DNS_PRESETS).map(([id, p]) => ({ id, label: p.label })),
+		dns: Object.entries(DNS_PRESETS).map(([id, p]) => ({
+			id,
+			label: p.label,
+			labelRu: p.labelRu ?? p.label,
+			note: p.note,
+			noteRu: p.noteRu ?? p.note,
+			servers: p.value,
+		})),
 	}
 }
 

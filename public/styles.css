@@ -2202,3 +2202,9 @@ summary:focus-visible {
 		flex: 1;
 	}
 }
+
+/* Hint under a field that needs a caveat, not just an explanation. Used for
+   the unblocking DNS resolvers, which see every query you make. */
+.field__hint--warn {
+	color: var(--orange);
+}

@@ -153,17 +153,130 @@ export const ALLOWED_IPS_PRESETS = {
 	},
 }
 
-/** DNS presets. Cloudflare's resolvers are the natural pair for WARP. */
+/**
+ * DNS presets. Cloudflare's resolvers are the natural pair for WARP.
+ *
+ * Every entry carries its IPv6 resolvers alongside the IPv4 ones. resolveDns()
+ * strips the v6 addresses when the config is built without IPv6, so listing
+ * them here is free; leaving them out is not, because an IPv6-enabled tunnel
+ * would then have no v6 resolver to talk to.
+ */
 export const DNS_PRESETS = {
 	cloudflare: {
 		label: "Cloudflare (1.1.1.1)",
+		labelRu: "Cloudflare (1.1.1.1)",
 		value: ["1.1.1.1", "1.0.0.1", "2606:4700:4700::1111", "2606:4700:4700::1001"],
 	},
 	cloudflareMalware: {
 		label: "Cloudflare, malware blocking (1.1.1.2)",
+		labelRu: "Cloudflare, блокировка вредоносных (1.1.1.2)",
 		value: ["1.1.1.2", "1.0.0.2", "2606:4700:4700::1112", "2606:4700:4700::1002"],
 	},
-	google: { label: "Google (8.8.8.8)", value: ["8.8.8.8", "8.8.4.4"] },
-	quad9: { label: "Quad9 (9.9.9.9)", value: ["9.9.9.9", "149.112.112.112"] },
-	adguard: { label: "AdGuard, ad blocking", value: ["94.140.14.14", "94.140.15.15"] },
+	cloudflareFamily: {
+		label: "Cloudflare, malware + adult (1.1.1.3)",
+		labelRu: "Cloudflare, вредоносные + 18+ (1.1.1.3)",
+		value: ["1.1.1.3", "1.0.0.3", "2606:4700:4700::1113", "2606:4700:4700::1003"],
+	},
+	google: {
+		label: "Google (8.8.8.8)",
+		labelRu: "Google (8.8.8.8)",
+		value: ["8.8.8.8", "8.8.4.4", "2001:4860:4860::8888", "2001:4860:4860::8844"],
+	},
+	quad9: {
+		label: "Quad9, malware blocking (9.9.9.9)",
+		labelRu: "Quad9, блокировка вредоносных (9.9.9.9)",
+		value: ["9.9.9.9", "149.112.112.112", "2620:fe::fe", "2620:fe::9"],
+	},
+	quad9Unfiltered: {
+		label: "Quad9, unfiltered (9.9.9.10)",
+		labelRu: "Quad9, без фильтрации (9.9.9.10)",
+		value: ["9.9.9.10", "149.112.112.10", "2620:fe::10", "2620:fe::fe:10"],
+	},
+	adguard: {
+		label: "AdGuard, ad blocking",
+		labelRu: "AdGuard, блокировка рекламы",
+		value: [
+			"94.140.14.14",
+			"94.140.15.15",
+			"2a10:50c0::ad1:ff",
+			"2a10:50c0::ad2:ff",
+		],
+	},
+	adguardFamily: {
+		label: "AdGuard, ads + adult",
+		labelRu: "AdGuard, реклама + 18+",
+		value: [
+			"94.140.14.15",
+			"94.140.15.16",
+			"2a10:50c0::bad1:ff",
+			"2a10:50c0::bad2:ff",
+		],
+	},
+	opendns: {
+		label: "OpenDNS (208.67.222.222)",
+		labelRu: "OpenDNS (208.67.222.222)",
+		value: [
+			"208.67.222.222",
+			"208.67.220.220",
+			"2620:119:35::35",
+			"2620:119:53::53",
+		],
+	},
+	dnssb: {
+		label: "DNS.SB, no logging (185.222.222.222)",
+		labelRu: "DNS.SB, без логов (185.222.222.222)",
+		value: ["185.222.222.222", "45.11.45.11", "2a09::", "2a11::"],
+	},
+	yandex: {
+		label: "Yandex (77.88.8.8)",
+		labelRu: "Яндекс (77.88.8.8)",
+		value: [
+			"77.88.8.8",
+			"77.88.8.1",
+			"2a02:6b8::feed:0ff",
+			"2a02:6b8:0:1::feed:0ff",
+		],
+	},
+
+	/*
+	 * Unblocking resolvers. These are not neutral caches: they answer with the
+	 * address of their own proxy for the domains they cover, so the operator
+	 * sees every query and decides what you connect to. Worth having, worth
+	 * labelling honestly, and worth remembering that only their plain UDP/53
+	 * addresses can go into a WireGuard config - DoH/DoT endpoints cannot.
+	 */
+	xboxdns: {
+		label: "Xbox DNS, unblocking (111.88.96.50)",
+		labelRu: "Xbox DNS, разблокировка (111.88.96.50)",
+		note: "Smart DNS: geo-blocked domains are routed through its proxy. The operator sees every query.",
+		noteRu: "Smart DNS: геоблокированные домены идут через его прокси. Владелец видит все запросы.",
+		value: [
+			"111.88.96.50",
+			"111.88.96.51",
+			"2a00:ab00:1233:26::50",
+			"2a00:ab00:1233:26::51",
+		],
+	},
+	malwlink: {
+		label: "dns.malw.link, unblocking (95.216.204.218)",
+		labelRu: "dns.malw.link, разблокировка (95.216.204.218)",
+		note: "DNS + SNI proxy that also nulls out ad and tracker domains. The operator sees every query.",
+		noteRu: "DNS + SNI-прокси, заодно режет рекламу и трекеры. Владелец видит все запросы.",
+		value: [
+			"95.216.204.218",
+			"80.253.249.40",
+			"2a01:4f9:c014:6dac::1",
+			"2a12:bec4:1460:5b7::2",
+		],
+	},
+	comss: {
+		label: "Comss.one, unblocking (83.220.169.155)",
+		labelRu: "Comss.one, разблокировка (83.220.169.155)",
+		note: "IPv4 only: AI services plus ad and phishing filtering. The operator sees every query.",
+		noteRu: "Только IPv4: ИИ-сервисы плюс фильтр рекламы и фишинга. Владелец видит все запросы.",
+		// Comss publishes no IPv6 resolver, only these two plain IPv4 servers.
+		// Flagged so the IPv6 coverage test can tell "deliberate" from "forgotten".
+		ipv4Only: true,
+		value: ["83.220.169.155", "212.109.195.93"],
+	},
 }

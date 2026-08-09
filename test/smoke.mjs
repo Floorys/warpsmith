@@ -18,7 +18,7 @@ const {
 } = await import("../src/core/amnezia.js")
 const { createRng } = await import("../src/core/rand.js")
 const { generateKeyPair, derivePublicKey } = await import("../src/core/keys.js")
-const { calculateMtu } = await import("../src/core/mtu.js")
+const { calculateMtu, DNS_PRESETS } = await import("../src/core/mtu.js")
 const { buildEndpoint } = await import("../src/core/endpoints.js")
 
 let passed = 0
@@ -401,6 +401,51 @@ await test("JSON output parses and carries the parameters", async () => {
 	assert.equal(typeof parsed.obfuscation.jc, "number")
 	assert.ok(parsed.peer.endpoint)
 	assert.ok(parsed.interface.privateKey)
+})
+
+await test("every DNS preset ships IPv6 resolvers unless marked IPv4-only", async () => {
+	for (const [id, preset] of Object.entries(DNS_PRESETS)) {
+		const hasV6 = preset.value.some((server) => server.includes(":"))
+		if (preset.ipv4Only) {
+			// The flag is a claim about the provider; make sure it stays true.
+			assert.ok(!hasV6, `DNS preset ${id} is flagged IPv4-only but has IPv6`)
+			continue
+		}
+		assert.ok(hasV6, `DNS preset ${id} has no IPv6 resolver`)
+	}
+})
+
+await test("an IPv4-only resolver still reaches an IPv6 tunnel", async () => {
+	const profile = await generateProfile({ dns: "comss", ipv6: true })
+	assert.deepEqual(profile.network.dns, ["83.220.169.155", "212.109.195.93"])
+})
+
+await test("unblocking presets carry a caveat in both languages", async () => {
+	for (const id of ["xboxdns", "malwlink", "comss"]) {
+		assert.ok(DNS_PRESETS[id].note, `${id} has no note`)
+		assert.ok(DNS_PRESETS[id].noteRu, `${id} has no Russian note`)
+	}
+	assert.ok(!DNS_PRESETS.cloudflare.note, "a neutral resolver must not warn")
+})
+
+await test("DNS presets fall back to IPv4 only when the tunnel has no IPv6", async () => {
+	const profile = await generateProfile({ dns: "quad9", ipv6: false })
+	assert.deepEqual(profile.network.dns, ["9.9.9.9", "149.112.112.112"])
+})
+
+await test("an IPv6 tunnel keeps the v6 resolvers", async () => {
+	const profile = await generateProfile({ dns: "google", ipv6: true })
+	assert.ok(profile.network.dns.includes("2001:4860:4860::8888"))
+})
+
+await test("a custom DNS list is accepted", async () => {
+	const profile = await generateProfile({ dns: "9.9.9.9, 1.1.1.1", ipv6: false })
+	assert.deepEqual(profile.network.dns, ["9.9.9.9", "1.1.1.1"])
+})
+
+await test("the chosen resolvers reach the rendered config", async () => {
+	const profile = await generateProfile({ dns: "adguard", ipv6: false })
+	assert.ok(profile.configs.amneziawg.content.includes("94.140.14.14"))
 })
 
 console.log(`\n${passed} passed, ${failed} failed\n`)
