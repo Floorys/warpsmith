@@ -138,7 +138,8 @@ async function cmdGenerate(args) {
 		obfuscation: args.obfuscation,
 		signatures: parseSignatures(args.signatures),
 		mimicryDomain: args["mimicry-domain"],
-		useClientIdHeaders: Boolean(args["client-id-headers"]),
+		// On by default now; --no-client-id-headers reproduces the old bare header.
+		useClientIdHeaders: !args["no-client-id-headers"],
 		seed: args.seed,
 		privateKey: args["private-key"],
 		license: args.license,

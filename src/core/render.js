@@ -43,8 +43,12 @@ function header(profile, flavor) {
 		lines.push("# silently drop the handshake. Point this config at your own")
 		lines.push("# AmneziaWG server, or pick a warp-* profile instead.")
 	} else if (obfuscation?.enabled) {
-		lines.push("# WARP-compatible: only junk packets (Jc/Jmin/Jmax) are used, which")
-		lines.push("# stock WireGuard ignores. No S1/S2 or H1-H4, so the handshake works.")
+		lines.push("# WARP-compatible: junk packets (Jc/Jmin/Jmax) only, which stock")
+		lines.push("# WireGuard ignores, and no S1/S2 padding, so the handshake works.")
+		if (obfuscation.headersFromClientId) {
+			lines.push("# H1-H4 are present and deliberately not random: they carry the")
+			lines.push("# Cloudflare client_id, exactly as the official WARP client does.")
+		}
 	}
 	if (meta.mock) {
 		lines.push("#")
@@ -94,10 +98,17 @@ export function renderAmneziaWG(profile) {
 		lines.push("")
 		lines.push(`# Cloudflare client_id = ${warp.reserved.base64}`)
 		lines.push(`# Reserved bytes = [${warp.reserved.bytes.join(", ")}]`)
-		lines.push("# Normally only needed by sing-box / v2ray WireGuard outbounds.")
-		lines.push("# AmneziaWG can also fold these bytes into H1-H4 so the packet header")
-		lines.push("# stops being a constant 01/02/03/04 while staying valid for Cloudflare")
-		lines.push("# (enable with --client-id-headers).")
+		if (obfuscation?.headersFromClientId) {
+			lines.push("# These bytes are folded into H1-H4 above, which is exactly how the")
+			lines.push("# official WARP client marks its packets. The low byte still carries")
+			lines.push("# the real message type, so Cloudflare accepts the packet, and the")
+			lines.push("# header stops being a constant 01/02/03/04 for anyone watching.")
+		} else {
+			lines.push("# WARNING: this config does NOT carry them in the header. Cloudflare")
+			lines.push("# completes the handshake and can still drop every transport packet,")
+			lines.push("# which looks exactly like 'connected, but no internet'. Regenerate")
+			lines.push("# without --no-client-id-headers, or use a client that sets Reserved.")
+		}
 	}
 
 	return join(lines)
@@ -115,6 +126,11 @@ export function renderWireGuard(profile) {
 	const lines = [
 		...header(profile, "WireGuard"),
 		"# Obfuscation parameters are intentionally omitted: stock wg-quick rejects them.",
+		"#",
+		"# Two consequences, both of them yours to live with: stock WireGuard cannot",
+		"# write the Cloudflare client_id into the reserved header bytes, and it sends",
+		"# a textbook handshake that DPI recognises instantly. Prefer the AmneziaWG",
+		"# file; keep this one only for clients that cannot read the other format.",
 		"",
 		"[Interface]",
 		`PrivateKey = ${keys.privateKey}`,

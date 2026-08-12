@@ -250,6 +250,7 @@ export const DNS_PRESETS = {
 		labelRu: "Xbox DNS, разблокировка (111.88.96.50)",
 		note: "Smart DNS: geo-blocked domains are routed through its proxy. The operator sees every query.",
 		noteRu: "Smart DNS: геоблокированные домены идут через его прокси. Владелец видит все запросы.",
+		unblocking: true,
 		value: [
 			"111.88.96.50",
 			"111.88.96.51",
@@ -262,6 +263,7 @@ export const DNS_PRESETS = {
 		labelRu: "dns.malw.link, разблокировка (95.216.204.218)",
 		note: "DNS + SNI proxy that also nulls out ad and tracker domains. The operator sees every query.",
 		noteRu: "DNS + SNI-прокси, заодно режет рекламу и трекеры. Владелец видит все запросы.",
+		unblocking: true,
 		value: [
 			"95.216.204.218",
 			"80.253.249.40",
@@ -277,6 +279,19 @@ export const DNS_PRESETS = {
 		// Comss publishes no IPv6 resolver, only these two plain IPv4 servers.
 		// Flagged so the IPv6 coverage test can tell "deliberate" from "forgotten".
 		ipv4Only: true,
+		unblocking: true,
 		value: ["83.220.169.155", "212.109.195.93"],
 	},
 }
+
+/**
+ * Neutral resolvers appended after an unblocking preset.
+ *
+ * An unblocking resolver is a small operation running on a couple of hosts,
+ * and inside a WARP tunnel its queries arrive from a foreign Cloudflare
+ * address. When such a resolver refuses, rate-limits or simply times out,
+ * nothing resolves at all and the tunnel looks dead even though the handshake
+ * is perfectly fine. Keeping a neutral resolver at the end of the list turns
+ * a total blackout into a slow first query.
+ */
+export const DNS_FALLBACK = ["1.1.1.1", "2606:4700:4700::1111"]

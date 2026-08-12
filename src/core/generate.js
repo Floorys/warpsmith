@@ -17,7 +17,7 @@ import {
 	DEFAULT_PROFILE,
 	COMPAT,
 } from "./amnezia.js"
-import { calculateMtu, ALLOWED_IPS_PRESETS, DNS_PRESETS } from "./mtu.js"
+import { calculateMtu, ALLOWED_IPS_PRESETS, DNS_PRESETS, DNS_FALLBACK } from "./mtu.js"
 import {
 	registerDevice,
 	applyLicense,
@@ -90,12 +90,15 @@ function resolveAllowedIps(input, ipv6) {
  * @param {string|undefined} input
  * @param {boolean} ipv6
  */
-function resolveDns(input, ipv6) {
+function resolveDns(input, ipv6, fallback = true) {
 	let list
+	let preset = null
 	if (!input) {
-		list = DNS_PRESETS.cloudflare.value
+		preset = DNS_PRESETS.cloudflare
+		list = preset.value
 	} else if (DNS_PRESETS[input]) {
-		list = DNS_PRESETS[input].value
+		preset = DNS_PRESETS[input]
+		list = preset.value
 	} else {
 		list = String(input)
 			.split(",")
@@ -103,7 +106,13 @@ function resolveDns(input, ipv6) {
 			.filter(Boolean)
 		if (!list.length) throw new GenerateError("DNS list is empty")
 	}
-	return ipv6 ? list : list.filter((server) => !server.includes(":"))
+
+	// A dead resolver is indistinguishable from a dead tunnel for the person
+	// using it, so unblocking presets never travel alone. See DNS_FALLBACK.
+	if (preset?.unblocking && fallback) list = [...list, ...DNS_FALLBACK]
+
+	const filtered = ipv6 ? list : list.filter((server) => !server.includes(":"))
+	return filtered.filter((server, i) => filtered.indexOf(server) === i)
 }
 
 /**
@@ -232,7 +241,12 @@ export async function generateProfile(options = {}) {
 		signatures: options.signatures,
 		mimicryDomain: options.mimicryDomain,
 		reserved: warp.reserved?.bytes,
-		useClientIdHeaders: options.useClientIdHeaders === true,
+		// Default ON, and this is the important part. The official WARP client
+		// always carries its client_id in the three reserved header bytes.
+		// A config without them completes the handshake and then has its
+		// transport packets dropped by the edge: "connected, no internet".
+		// Pass false only to reproduce a bare stock-WireGuard header.
+		useClientIdHeaders: options.useClientIdHeaders !== false,
 	})
 	if (!obfuscation.validation.valid) {
 		throw new GenerateError(
@@ -254,7 +268,7 @@ export async function generateProfile(options = {}) {
 
 	const network = {
 		addresses,
-		dns: resolveDns(options.dns, ipv6),
+		dns: resolveDns(options.dns, ipv6, options.dnsFallback !== false),
 		allowedIps: resolveAllowedIps(options.allowedIps, ipv6),
 		mtu,
 		mtuInfo,
@@ -309,6 +323,39 @@ function collectWarnings(profile) {
 			"MOCK MODE is on. This config contains synthetic credentials and will not connect.",
 		)
 	}
+	// The classic WARP failure: the tunnel comes up, the handshake succeeds, and
+	// then not a single packet makes it back. Almost always a missing client_id.
+	if (
+		profile.obfuscation.compat === "warp" &&
+		profile.warp.reserved &&
+		!profile.obfuscation.headersFromClientId
+	) {
+		warnings.unshift(
+			"The Cloudflare client_id is missing from the packet header. WARP will complete " +
+				"the handshake and can still drop every transport packet, which looks exactly " +
+				'like "connected, but no internet". Regenerate with client_id headers enabled.',
+		)
+	}
+
+	const unblocking = Object.entries(DNS_PRESETS).find(
+		([, preset]) =>
+			preset.unblocking && preset.value.some((server) => profile.network.dns.includes(server)),
+	)
+	if (unblocking) {
+		warnings.push(
+			`Unblocking resolver in use (${unblocking[0]}). Inside the tunnel its queries arrive ` +
+				`from a foreign Cloudflare address, so it may answer slowly or refuse outright; ` +
+				`${DNS_FALLBACK[0]} is appended so name resolution never dies completely.`,
+		)
+	}
+
+	if (profile.endpoint.port === 2408) {
+		warnings.push(
+			"Port 2408 is the advertised WARP port and the first thing an ISP throttles. If the " +
+				"tunnel connects but stalls, regenerate on 500, 1701 or 4500.",
+		)
+	}
+
 	if (profile.license && profile.license.applied === false) {
 		warnings.push(`WARP+ license was not applied: ${profile.license.error}`)
 	}

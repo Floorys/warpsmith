@@ -1235,6 +1235,26 @@ function showView(name) {
 const FAQ = [
 	{
 		q: {
+			ru: "Туннель подключился, но интернета нет. В чём дело?",
+			en: "The tunnel connects but there is no internet. What is wrong?",
+		},
+		a: {
+			ru: "Cloudflare узнаёт вашу сессию по client_id — трём «зарезервированным» байтам в заголовке каждого пакета. Их выдают при регистрации, и официальный клиент WARP проставляет их всегда. Без них рукопожатие всё равно проходит: клиент показывает зелёный статус и свежий handshake, а обратно не приходит ни одного пакета. Именно так выглядит «подключение есть, интернета нет». Генератор теперь всегда зашивает client_id в H1–H4: младший байт остаётся настоящим типом пакета (1, 2, 3 или 4), поэтому Cloudflare пакет принимает, а заголовок перестаёт быть константой. Откройте свой конфиг: если в нём нет строк H1–H4, он старый — перегенерируйте.",
+			en: "Cloudflare identifies your session by its client_id, three reserved bytes in the header of every packet. It is handed out at registration and the official WARP client always sets it. Without it the handshake still succeeds: the client shows a green status and a fresh handshake, and not a single packet comes back. That is exactly what \"connected, but no internet\" looks like. The generator now always folds the client_id into H1–H4: the low byte stays the real message type (1, 2, 3 or 4), so Cloudflare accepts the packet while the header stops being a constant. Open your config: if it has no H1–H4 lines it is an old one, so regenerate it.",
+		},
+	},
+	{
+		q: {
+			ru: "Нужно ли запускать Zapret вместе с WARP? На телефоне его не запустишь.",
+			en: "Do I need to run Zapret alongside WARP? I cannot run it on a phone.",
+		},
+		a: {
+			ru: "Не нужно, и это принципиально. Если туннель оживает только вместе с Zapret — значит сломан сам туннель, а Zapret просто маскирует поломку. Держать их вместе даже вредно: Zapret правит исходящие UDP-пакеты на лету, включая пакеты самого WireGuard, и может испортить рукопожатие. На Android и iOS хватает приложения AmneziaWG: junk-пакеты (Jc/Jmin/Jmax) отправляет сам клиент, ставить рядом нечего и не нужно. Если провайдер режет не сигнатуру протокола, а сами адреса Cloudflare, Zapret тоже не поможет — помогает смена порта (500, 1701 или 4500 вместо 2408) и другой префикс адреса на вкладке «Локация».",
+			en: "No, and that matters. If the tunnel only comes alive together with Zapret, the tunnel itself is broken and Zapret is merely masking it. Running both is actively harmful: Zapret rewrites outgoing UDP packets on the fly, WireGuard's own packets included, and can corrupt the handshake. On Android and iOS the AmneziaWG app is enough — junk packets (Jc/Jmin/Jmax) are sent by the client itself, so there is nothing to add. And if your ISP blocks the Cloudflare addresses rather than the protocol signature, Zapret will not help either: change the port (500, 1701 or 4500 instead of 2408) and the address prefix on the Location tab.",
+		},
+	},
+	{
+		q: {
 			ru: "Конфиг импортируется, но туннель не поднимается. Почему?",
 			en: "The config imports fine but the tunnel never connects. Why?",
 		},

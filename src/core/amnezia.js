@@ -70,6 +70,18 @@ export const LIMITS = {
 	itime: { min: 0, max: 3600 },
 }
 
+/**
+ * H1-H4 are a uint32 on the wire.
+ *
+ * LIMITS.header deliberately keeps *randomly generated* headers inside the
+ * int32 range, because several AmneziaWG UIs parse the field as a signed
+ * integer and reject anything above it. A client_id, however, is not ours to
+ * choose: Cloudflare hands out a third byte >= 128 about half the time, which
+ * pushes the derived header past 2^31. Clamping those to int32 is how half of
+ * all users ended up with no client_id in the header at all.
+ */
+export const HEADER_UINT32_MAX = 4294967295
+
 export class ObfuscationError extends Error {}
 
 /** Compatibility targets. */
@@ -463,8 +475,11 @@ export function deriveWarpHeaders(reservedBytes) {
 	const base = r0 * 0x100 + r1 * 0x10000 + r2 * 0x1000000
 	const headers = { h1: base + 1, h2: base + 2, h3: base + 3, h4: base + 4 }
 
+	// Full uint32 range on purpose - see HEADER_UINT32_MAX. Rejecting a valid
+	// client_id here is far worse than a header a picky UI dislikes: the tunnel
+	// connects and then carries no traffic.
 	const values = Object.values(headers)
-	if (values.some((v) => v < LIMITS.header.min || v > LIMITS.header.max)) return null
+	if (values.some((v) => v < LIMITS.header.min || v > HEADER_UINT32_MAX)) return null
 	return headers
 }
 
@@ -551,7 +566,9 @@ export function validateObfuscation(params, context = {}) {
 	const headers = [h1, h2, h3, h4]
 	const hasHeaders = headers.some((h) => h !== undefined && h !== null)
 	if (hasHeaders) {
-		headers.forEach((h, i) => intIn(`H${i + 1}`, h, LIMITS.header.min, LIMITS.header.max))
+		// A derived header may legitimately exceed int32; a random one may not.
+		const headerMax = context.headersFromClientId ? HEADER_UINT32_MAX : LIMITS.header.max
+		headers.forEach((h, i) => intIn(`H${i + 1}`, h, LIMITS.header.min, headerMax))
 		if (headers.every(Number.isInteger) && new Set(headers).size !== 4) {
 			errors.push("H1, H2, H3 and H4 must all be different values")
 		}

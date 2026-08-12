@@ -192,7 +192,9 @@ const routes = {
 			signatures: body.signatures,
 			mimicryDomain: body.mimicryDomain,
 			reserved: body.reserved,
-			useClientIdHeaders: body.useClientIdHeaders === true,
+			// Opt out, not opt in: see generate.js for why the client_id must be
+			// in the header by default.
+			useClientIdHeaders: body.useClientIdHeaders !== false,
 		})
 	},
 
