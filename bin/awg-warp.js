@@ -19,6 +19,11 @@ import {
 	PACKET_SIGNATURES,
 } from "../src/core/amnezia.js"
 import { isMockMode } from "../src/core/warp.js"
+import {
+	findWarpscoutBinary,
+	downloadWarpscout,
+	scoutEndpoints,
+} from "../src/core/scout.js"
 
 const COLORS = process.stdout.isTTY && !process.env.NO_COLOR
 const c = {
@@ -77,18 +82,21 @@ function parseSignatures(value) {
 function usage() {
 	const { obfuscationProfiles, allowedIps, dns } = describeOptions()
 	console.log(`
-${c.bold("awg-warp")} - Cloudflare WARP config generator with AmneziaWG obfuscation
+${c.bold("awg-warp")} - Cloudflare WARP config generator with AmneziaWG obfuscation & WarpScout
 
 ${c.bold("COMMANDS")}
   generate            Register a WARP device and write a config
-  scan                Probe Cloudflare endpoints and report their real location
+  scout               Scan and find working Cloudflare endpoints (via WarpScout / native)
+  scan                Probe Cloudflare datacenters and report real locations
   obfuscate           Print an obfuscation parameter block only
   serve               Start the web UI (same as npm start)
 
 ${c.bold("GENERATE OPTIONS")}
   --obfuscation <id>  ${obfuscationProfiles.map((p) => p.id).join(" | ")}   (default: warp-balanced)
-  --out <file>        Write the AmneziaWG config here (default: stdout)
-  --format <fmt>      awg | wg | json          (default: awg)
+  --out <file>        Write the config here (default: stdout)
+  --format <fmt>      awg | wg | json | vpn | mihomo | singbox   (default: awg)
+  --scout             Automatically scan and use the best working endpoint
+  --sni <domain>      Spoofed SNI domain for mimicry (e.g. www.apple.com)
   --seed <hex>        Reproduce a previous profile exactly
   --private-key <k>   Reuse an existing WireGuard identity
   --license <key>     Apply a WARP+ license
@@ -104,48 +112,56 @@ ${c.bold("GENERATE OPTIONS")}
   --no-ipv6           Strip IPv6 addresses and routes
   --preshared-key     Add an extra symmetric PSK
 
-${c.bold("MIMICRY OPTIONS")}  ${c.dim("(awg-mimicry profile, own AmneziaWG server only)")}
+${c.bold("MIMICRY & SNI OPTIONS")}  ${c.dim("(fake protocol packets, AmneziaWG 1.5+ client)")}
   --signatures <ids>  Comma separated: ${Object.keys(PACKET_SIGNATURES).join(",")}
-  --mimicry-domain <d> Domain to imitate, e.g. github.com or vk.com
-  --client-id-headers  Derive H1-H4 from the Cloudflare client_id (WARP-safe)
+  --sni <domain>      Domain for SNI spoofing, e.g. www.apple.com, cdn.jsdelivr.net, vk.com
+  --mimicry-domain <d> Alias for --sni
+
+${c.bold("SCOUT OPTIONS")}
+  --proto <p>         awg | wg | masque | masque-h2 (default: awg)
+  --best              Print only the single best endpoint (ip:port)
+  --native            Force native Node.js scanner instead of warpscout binary
+  --download          Download latest warpscout binary from GitHub
 
 ${c.bold("EXAMPLES")}
-  ${c.dim("# Everyday config")}
-  awg-warp generate --out warp.conf
+  ${c.dim("# Everyday config with auto-scouted endpoint")}
+  awg-warp generate --scout --out warp.conf
 
-  ${c.dim("# Heavy obfuscation, pinned to a port that looks like IPsec")}
-  awg-warp generate --obfuscation warp-heavy --port 4500 --out warp.conf
+  ${c.dim("# Scan working endpoints with WarpScout")}
+  awg-warp scout
 
-  ${c.dim("# Find the closest datacenter first, then pin to it")}
-  awg-warp scan
-  awg-warp generate --endpoint 162.159.193.10:2408 --detect-location
+  ${c.dim("# The proven stealth recipe: QUIC initial + Apple SNI spoofing")}
+  awg-warp generate --obfuscation warp-cloak --sni www.apple.com --out warp.conf
 
-  ${c.dim("# Same obfuscation parameters on a second device")}
-  awg-warp generate --seed 4f2a9c1b7e0d3a55 --out phone.conf
-
-  ${c.dim("# Make the tunnel start like an HTTPS session to github.com")}
-  ${c.dim("# (requires your own AmneziaWG server, not Cloudflare WARP)")}
-  awg-warp generate --obfuscation awg-mimicry --signatures tls,quic \\
-    --mimicry-domain github.com --out home.conf
-
-  ${c.dim("# Offline dry run, no Cloudflare contact")}
-  MOCK_WARP=1 awg-warp generate
+  ${c.dim("# Export for Clash.Meta / Mihomo with AmneziaWG obfuscation")}
+  awg-warp generate --format mihomo --out warp.yaml
 `)
 }
 
 async function cmdGenerate(args) {
+	let endpointHost = args.endpoint
+	if (!endpointHost && (args.scout || args["warp-scout"])) {
+		process.stderr.write("Scouting for best working endpoint...\n")
+		const sc = await scoutEndpoints({
+			sni: args.sni || args["mimicry-domain"],
+			preferNative: Boolean(args.native),
+		})
+		if (sc.best) {
+			endpointHost = sc.best
+			process.stderr.write(`Selected best endpoint: ${sc.best}\n`)
+		}
+	}
+
 	const profile = await generateProfile({
 		obfuscation: args.obfuscation,
 		signatures: parseSignatures(args.signatures),
-		mimicryDomain: args["mimicry-domain"],
-		// On by default now; --no-client-id-headers reproduces the old bare header.
-		useClientIdHeaders: !args["no-client-id-headers"],
+		mimicryDomain: args.sni || args["mimicry-domain"],
 		seed: args.seed,
 		privateKey: args["private-key"],
 		license: args.license,
 		endpointPrefix: args.prefix,
 		endpointPort: args.port,
-		endpointHost: args.endpoint,
+		endpointHost: endpointHost,
 		detectLocation: Boolean(args["detect-location"]),
 		allowedIps: args["allowed-ips"],
 		dns: args.dns,
@@ -163,7 +179,13 @@ async function cmdGenerate(args) {
 			? profile.configs.wireguard
 			: format === "json"
 				? profile.configs.json
-				: profile.configs.amneziawg
+				: format === "vpn"
+					? profile.configs.vpn
+					: format === "mihomo"
+						? profile.configs.mihomo
+						: format === "singbox"
+							? profile.configs.singbox
+							: profile.configs.amneziawg
 
 	if (args.out) {
 		const target = path.resolve(String(args.out))
@@ -247,6 +269,56 @@ async function cmdObfuscate(args) {
 	for (const w of result.validation.warnings) console.log(c.yellow(`  ! ${w}`))
 }
 
+async function cmdScout(args) {
+	console.log(c.bold("🛰️ WARP Endpoint Scout (WarpScout)"))
+
+	if (args.download) {
+		console.log("Downloading warpscout binary from GitHub releases...")
+		const res = await downloadWarpscout()
+		if (res.success) {
+			console.log(c.green(`Downloaded to ${res.path}`))
+		} else {
+			console.error(c.red(`Download failed: ${res.error}`))
+		}
+		return
+	}
+
+	const ws = await findWarpscoutBinary()
+	if (ws.available && !args.native) {
+		console.log(c.dim(`Using WarpScout CLI (${ws.version || ws.path})`))
+	} else {
+		console.log(c.dim("WarpScout binary not found, using built-in native prober."))
+		console.log(c.dim("Run `awg-warp scout --download` to install the official warpscout binary."))
+	}
+
+	console.log("Scanning Cloudflare WARP endpoints...")
+	const result = await scoutEndpoints({
+		proto: args.proto || "awg",
+		sni: args.sni || args["mimicry-domain"],
+		genI1: args["gen-i1"] || "quic",
+		preferNative: Boolean(args.native),
+	})
+
+	if (args.best && result.best) {
+		console.log(result.best)
+		return
+	}
+
+	console.log("")
+	console.log(c.bold(`Found ${result.endpoints.length} active endpoints (via ${result.method}):`))
+	for (const ep of result.endpoints) {
+		const ping = ep.rttMs ? `${ep.rttMs}ms`.padStart(7) : "   ? ms"
+		const loc = ep.city ? `${ep.city}, ${ep.country || ""}` : ep.colo || "Cloudflare"
+		const status = ep.status === "ok" ? c.green("ACTIVE") : c.yellow(ep.status)
+		console.log(`  ${c.cyan(ep.endpoint.padEnd(24))}  ${ping}  ${loc.padEnd(28)}  ${status}`)
+	}
+	if (result.best) {
+		console.log("")
+		console.log(c.green(`Best endpoint: ${c.bold(result.best)}`))
+		console.log(c.dim(`Use it with: awg-warp generate --endpoint ${result.best}`))
+	}
+}
+
 async function main() {
 	const argv = process.argv.slice(2)
 	const args = parseArgs(argv)
@@ -263,6 +335,9 @@ async function main() {
 	switch (command) {
 		case "generate":
 			await cmdGenerate(args)
+			break
+		case "scout":
+			await cmdScout(args)
 			break
 		case "scan":
 			await cmdScan(args)

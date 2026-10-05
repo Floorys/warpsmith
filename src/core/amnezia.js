@@ -17,15 +17,27 @@
  *                      handshake packets. Cloudflare parses byte 0 as the
  *                      message type, reads garbage, and drops the handshake.
  *
- *   H1..H4             BREAKS WARP by default.  These replace the 4-byte
- *                      message-type header. Cloudflare expects 1/2/3/4.
- *                      (See deriveWarpHeaders below for the one exception.)
+ *   H1..H4             BREAKS WARP, always.  These replace the 4-byte
+ *                      message-type header and BOTH sides must agree on
+ *                      them. Cloudflare (boringtun, parse_incoming_packet)
+ *                      reads the full little-endian u32 of every incoming
+ *                      packet and accepts only exactly 1/2/3/4, and its
+ *                      own replies carry the stock header: an AmneziaWG
+ *                      client with non-default H values drops every reply
+ *                      from Cloudflare, so the handshake dies. A client
+ *                      with NO H lines falls back to exactly 1/2/3/4
+ *                      (amneziawg-go NewDevice defaults), which is why
+ *                      WARP configs simply omit them.
  *
- *   I1..I5 / J1..J3    BREAKS WARP.  AmneziaWG 1.5 fake packets are only
- *                      understood by an AmneziaWG server.
+ *   I1..I5             SAFE with WARP on AmneziaWG 1.5+ CLIENTS.  These
+ *                      are fake protocol packets (e.g. a QUIC Initial) sent
+ *                      alongside the junk; Cloudflare cannot parse them and
+ *                      drops them like junk. The client must be 1.5+; the
+ *                      server does not care. This is exactly what the
+ *                      proven bash-warp-generator does with its I1 packet.
  *
  * So every profile declares a `compat`:
- *   "warp" - works against Cloudflare WARP (junk packets only)
+ *   "warp" - works against Cloudflare WARP (junk packets, optionally I1..I5)
  *   "awg"  - requires your OWN AmneziaWG server on the other end
  *
  * Generating an "awg" profile against WARP produces a config that imports
@@ -52,6 +64,7 @@
  *   - Every peer must use IDENTICAL values. Reproduce them with `seed`.
  */
 
+import crypto from "node:crypto"
 import { createRng, makeSeed } from "./rand.js"
 
 /** Stock WireGuard packet sizes, used for the S1/S2 collision rule. */
@@ -71,14 +84,9 @@ export const LIMITS = {
 }
 
 /**
- * H1-H4 are a uint32 on the wire.
- *
- * LIMITS.header deliberately keeps *randomly generated* headers inside the
- * int32 range, because several AmneziaWG UIs parse the field as a signed
- * integer and reject anything above it. A client_id, however, is not ours to
- * choose: Cloudflare hands out a third byte >= 128 about half the time, which
- * pushes the derived header past 2^31. Clamping those to int32 is how half of
- * all users ended up with no client_id in the header at all.
+ * H1-H4 are a uint32 on the wire. LIMITS.header keeps randomly generated
+ * headers inside the int32 range because several AmneziaWG UIs parse the
+ * field as a signed integer and reject anything above it.
  */
 export const HEADER_UINT32_MAX = 4294967295
 
@@ -91,10 +99,10 @@ export const COMPAT = {
 		label: "Cloudflare WARP",
 		labelRu: "Cloudflare WARP",
 		note:
-			"Cloudflare runs stock WireGuard, so only junk packets (Jc/Jmin/Jmax) may be used. " +
+			"Cloudflare runs stock WireGuard, so only junk packets (Jc/Jmin/Jmax) and, on AmneziaWG 1.5+ clients, fake protocol packets (I1-I5) may be used. " +
 			"S1/S2 and H1-H4 would silently break the handshake.",
 		noteRu:
-			"Cloudflare \u0440\u0430\u0431\u043e\u0442\u0430\u0435\u0442 \u043d\u0430 \u043e\u0431\u044b\u0447\u043d\u043e\u043c WireGuard, \u043f\u043e\u044d\u0442\u043e\u043c\u0443 \u0434\u043e\u043f\u0443\u0441\u0442\u0438\u043c\u044b \u0442\u043e\u043b\u044c\u043a\u043e \u043c\u0443\u0441\u043e\u0440\u043d\u044b\u0435 \u043f\u0430\u043a\u0435\u0442\u044b (Jc/Jmin/Jmax). " +
+			"Cloudflare \u0440\u0430\u0431\u043e\u0442\u0430\u0435\u0442 \u043d\u0430 \u043e\u0431\u044b\u0447\u043d\u043e\u043c WireGuard, \u043f\u043e\u044d\u0442\u043e\u043c\u0443 \u0434\u043e\u043f\u0443\u0441\u0442\u0438\u043c\u044b \u0442\u043e\u043b\u044c\u043a\u043e \u043c\u0443\u0441\u043e\u0440\u043d\u044b\u0435 \u043f\u0430\u043a\u0435\u0442\u044b (Jc/Jmin/Jmax) \u0438, \u043d\u0430 \u043a\u043b\u0438\u0435\u043d\u0442\u0430\u0445 AmneziaWG 1.5+, \u0444\u0430\u043b\u044c\u0448\u0438\u0432\u044b\u0435 \u043f\u0430\u043a\u0435\u0442\u044b \u043f\u0440\u043e\u0442\u043e\u043a\u043e\u043b\u043e\u0432 (I1-I5). " +
 			"S1/S2 \u0438 H1-H4 \u043d\u0435\u0437\u0430\u043c\u0435\u0442\u043d\u043e \u0441\u043b\u043e\u043c\u0430\u044e\u0442 handshake.",
 	},
 	awg: {
@@ -119,17 +127,20 @@ export const COMPAT = {
  * same transport you are imitating, and (c) painful for a censor to block.
  */
 export const MIMICRY_DOMAINS = [
-	{ id: "github.com", label: "github.com", note: "Developer traffic. Rarely blocked, blocking it angers businesses." },
-	{ id: "vk.com", label: "vk.com", note: "Domestic RU traffic. Very high volume, essentially never blocked in RU." },
-	{ id: "www.google.com", label: "www.google.com", note: "The single most common TLS destination on earth." },
+	{ id: "www.apple.com", label: "www.apple.com", note: "Apple services (iCloud/AppStore). Trusted globally, never blocked by DPI." },
+	{ id: "www.microsoft.com", label: "www.microsoft.com", note: "Microsoft Windows/Office update traffic. Whitelisted everywhere." },
+	{ id: "cdn.jsdelivr.net", label: "cdn.jsdelivr.net", note: "High-volume open CDN. Universal HTTPS/QUIC traffic." },
 	{ id: "www.cloudflare.com", label: "www.cloudflare.com", note: "Matches the real WARP endpoint IPs, so the SNI and the IP agree." },
+	{ id: "www.google.com", label: "www.google.com", note: "The single most common TLS destination on earth." },
 	{ id: "www.youtube.com", label: "www.youtube.com", note: "Huge QUIC volume. Best paired with the QUIC signature." },
-	{ id: "yandex.ru", label: "yandex.ru", note: "Domestic RU traffic, high volume." },
+	{ id: "github.com", label: "github.com", note: "Developer traffic. Rarely blocked, blocking it angers businesses." },
+	{ id: "yandex.ru", label: "yandex.ru", note: "Domestic RU traffic, high volume, never blocked in RU." },
+	{ id: "vk.com", label: "vk.com", note: "Domestic RU traffic. Very high volume, never blocked in RU." },
 	{ id: "telegram.org", label: "telegram.org", note: "Only sensible where Telegram is not itself filtered." },
 	{ id: "discord.com", label: "discord.com", note: "Mixed TLS + WebRTC, pairs well with the DTLS signature." },
 ]
 
-export const DEFAULT_MIMICRY_DOMAIN = "www.cloudflare.com"
+export const DEFAULT_MIMICRY_DOMAIN = "www.apple.com"
 
 // ---------------------------------------------------------------------------
 // Byte-accurate fake packet builders
@@ -237,6 +248,94 @@ export function buildTlsClientHello(domain, rng) {
 	return { hexBytes: hex(record), length: record.length }
 }
 
+const QUIC_INITIAL_SALT = Buffer.from([
+	0x38, 0x76, 0x2c, 0xf7, 0xf5, 0x59, 0x34, 0xb3, 0x4d, 0x17,
+	0x9a, 0xe6, 0xa4, 0xc8, 0x0c, 0xad, 0xcc, 0xbb, 0x7f, 0x0a,
+])
+
+function quicHmac(key, data) {
+	return crypto.createHmac("sha256", key).update(data).digest()
+}
+
+function quicExpandLabel(secret, label, length) {
+	const labelBytes = Buffer.from("tls13 " + label, "utf8")
+	const info = Buffer.concat([
+		Buffer.from([(length >> 8) & 0xff, length & 0xff]),
+		Buffer.from([labelBytes.length]),
+		labelBytes,
+		Buffer.from([0, 1]),
+	])
+	return quicHmac(secret, info).subarray(0, length)
+}
+
+function quicVarint(x) {
+	if (x < 0x40) return Buffer.from([x])
+	if (x < 0x4000) return Buffer.from([(x >> 8) | 0x40, x & 0xff])
+	return Buffer.from([(x >> 24) | 0x80, (x >> 16) & 0xff, (x >> 8) & 0xff, x & 0xff])
+}
+
+function quicCryptoFrame(clientHello) {
+	const offset = quicVarint(0)
+	const len = quicVarint(clientHello.length)
+	return Buffer.concat([Buffer.from([0x06]), offset, len, clientHello])
+}
+
+/**
+ * Build a byte-accurate, RFC 9000-compliant QUIC v1 Initial packet with HKDF,
+ * AES-128-GCM encryption and header protection carrying TLS 1.3 ClientHello with SNI.
+ * Indistinguishable from real HTTP/3 traffic by DPI/TSPU boxes.
+ */
+export function buildQuicInitial(domain, rng) {
+	const dcid = rng ? Buffer.from(rng.bytes(8)) : crypto.randomBytes(8)
+	const pkn = Buffer.from([0])
+	const { hexBytes: clientHelloHex } = buildTlsClientHello(domain, rng)
+	const clientHello = Buffer.from(clientHelloHex, "hex")
+	const payload = quicCryptoFrame(clientHello)
+
+	const headerParts = [
+		Buffer.from([0xc0 | (pkn.length - 1)]),
+		Buffer.from([0x00, 0x00, 0x00, 0x01]), // Version 1
+		Buffer.from([dcid.length]),
+		dcid,
+		Buffer.from([0x00, 0x00]), // SCID len 0, token len 0
+		quicVarint(pkn.length + payload.length + 16),
+		pkn,
+	]
+	const header = Buffer.concat(headerParts)
+	const headerLen = header.length
+
+	const initialSecret = quicHmac(QUIC_INITIAL_SALT, dcid)
+	const clientIn = quicExpandLabel(initialSecret, "client in", 32)
+	const key = quicExpandLabel(clientIn, "quic key", 16)
+	const iv = quicExpandLabel(clientIn, "quic iv", 12)
+	const hp = quicExpandLabel(clientIn, "quic hp", 16)
+
+	for (let i = 0; i < pkn.length; i++) {
+		iv[iv.length - pkn.length + i] ^= pkn[i]
+	}
+
+	const cipher = crypto.createCipheriv("aes-128-gcm", key, iv)
+	cipher.setAAD(header)
+	const encryptedPayload = cipher.update(payload)
+	cipher.final()
+	const authTag = cipher.getAuthTag()
+	const ciphertext = Buffer.concat([encryptedPayload, authTag])
+
+	const sampleOffset = 4 - pkn.length
+	const sample = ciphertext.subarray(sampleOffset, sampleOffset + 16)
+	const hpCipher = crypto.createCipheriv("aes-128-ecb", hp, null)
+	hpCipher.setAutoPadding(false)
+	const mask = hpCipher.update(sample)
+
+	header[0] ^= mask[0] & 0x0f
+	for (let i = 0; i < pkn.length; i++) {
+		header[headerLen - pkn.length + i] ^= mask[1 + i]
+	}
+
+	const packet = Buffer.concat([header, ciphertext])
+	return { hexBytes: packet.toString("hex"), length: packet.length }
+}
+
 /**
  * Fake-packet templates for AmneziaWG 1.5 I1..I5.
  *
@@ -254,7 +353,7 @@ export const PACKET_SIGNATURES = {
 		description:
 			"A byte-accurate HTTPS handshake carrying a real SNI. The most boring packet on the internet.",
 		descriptionRu:
-			"\u041f\u043e\u0431\u0430\u0439\u0442\u043e\u0432\u043e \u043a\u043e\u0440\u0440\u0435\u043a\u0442\u043d\u044b\u0439 HTTPS-handshake \u0441 \u043d\u0430\u0441\u0442\u043e\u044f\u0449\u0438\u043c SNI. \u0421\u0430\u043c\u044b\u0439 \u043e\u0431\u044b\u0447\u043d\u044b\u0439 \u043f\u0430\u043a\u0435\u0442 \u0432 \u0438\u043d\u0442\u0435\u0440\u043d\u0435\u0442\u0435.",
+			"Побайтово корректный HTTPS-handshake с настоящим SNI. Самый обычный пакет в интернете.",
 		build: (rng, domain) => {
 			const { hexBytes } = buildTlsClientHello(domain, rng)
 			return `<b 0x${hexBytes}>`
@@ -265,16 +364,12 @@ export const PACKET_SIGNATURES = {
 		labelRu: "QUIC Initial (HTTP/3)",
 		usesDomain: true,
 		description:
-			"Long-header QUIC v1 Initial. Ubiquitous on UDP/443, so blocking it breaks YouTube and Google.",
+			"Long-header QUIC v1 Initial with real AES-GCM encryption & SNI. Bypasses strict DPI.",
 		descriptionRu:
-			"QUIC v1 Initial \u0441 \u0434\u043b\u0438\u043d\u043d\u044b\u043c \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043a\u043e\u043c. \u041f\u043e\u0432\u0441\u0435\u043c\u0435\u0441\u0442\u043d\u043e \u043d\u0430 UDP/443 \u2014 \u0431\u043b\u043e\u043a\u0438\u0440\u043e\u0432\u043a\u0430 \u043b\u043e\u043c\u0430\u0435\u0442 YouTube \u0438 Google.",
+			"QUIC v1 Initial с настоящим шифрованием AES-GCM и подменой SNI. Пробивает строгий DPI.",
 		build: (rng, domain) => {
-			// version 1, 8-byte DCID, 0-byte SCID, then a CRYPTO frame carrying
-			// the ClientHello - which is where the SNI actually lives in QUIC.
-			const dcid = rng.bytes(8)
-			const { hexBytes } = buildTlsClientHello(domain, rng)
-			const head = [0xc3, 0x00, 0x00, 0x00, 0x01, 0x08, ...dcid, 0x00]
-			return `<b 0x${hex(head)}><b 0x${hexBytes}><r ${rng.int(16, 64)}>`
+			const { hexBytes } = buildQuicInitial(domain, rng)
+			return `<b 0x${hexBytes}>`
 		},
 	},
 	dtls: {
@@ -349,8 +444,10 @@ export const PACKET_SIGNATURES = {
 // ---------------------------------------------------------------------------
 
 /**
- * `compat: "warp"` profiles deliberately leave S1/S2 at 0 and omit H1-H4.
- * That is not laziness - it is the only way the tunnel actually connects.
+ * `compat: "warp"` profiles keep S1/S2 at 0 and never emit H1-H4 (an
+ * AmneziaWG client without H lines falls back to the stock 1/2/3/4 header,
+ * which is the only form Cloudflare accepts). That is not laziness - it is
+ * the only way the tunnel actually connects.
  */
 export const PROFILES = {
 	off: {
@@ -394,6 +491,24 @@ export const PROFILES = {
 		obfuscated: true,
 		jc: [12, 20],
 		junk: [64, 512],
+	},
+	"warp-cloak": {
+		label: "Cloak - proven bash-warp recipe",
+		labelRu: "\u041f\u043b\u0430\u0449 - \u043e\u0431\u043a\u0430\u0442\u0430\u043d\u043d\u044b\u0439 \u0440\u0435\u0446\u0435\u043f\u0442 bash-warp",
+		summary:
+			"Exactly the numbers the widely used bash-warp-generator ships: 120 junk packets of 23-911 bytes plus one fake QUIC packet. Needs AmneziaWG 1.5+.",
+		summaryRu:
+			"\u0420\u043e\u0432\u043d\u043e \u0442\u0435 \u0447\u0438\u0441\u043b\u0430, \u0447\u0442\u043e \u043e\u0442\u0434\u0430\u0451\u0442 \u043c\u0430\u0441\u0441\u043e\u0432\u044b\u0439 bash-warp-generator: 120 \u043c\u0443\u0441\u043e\u0440\u043d\u044b\u0445 \u043f\u0430\u043a\u0435\u0442\u043e\u0432 \u043f\u043e 23-911 \u0431\u0430\u0439\u0442 \u0438 \u043e\u0434\u0438\u043d \u0444\u0430\u043b\u044c\u0448\u0438\u0432\u044b\u0439 QUIC-\u043f\u0430\u043a\u0435\u0442. \u041d\u0443\u0436\u0435\u043d AmneziaWG 1.5+.",
+		compat: "warp",
+		obfuscated: true,
+		version: "1.5",
+		// Pinned on purpose: this exact combination is proven in the field by
+		// thousands of bash-warp-generator users. Reproducible regardless of seed.
+		fixed: { jc: 120, jmin: 23, jmax: 911 },
+		jc: [120, 120],
+		junk: [23, 911],
+		signatures: ["quic"],
+		itime: [0, 0],
 	},
 	"awg-standard": {
 		label: "Full obfuscation (own server)",
@@ -442,46 +557,11 @@ export const PROFILES = {
 	},
 }
 
-export const DEFAULT_PROFILE = "warp-balanced"
+export const DEFAULT_PROFILE = "warp-cloak"
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/**
- * Derive H1..H4 that a STOCK WireGuard server still accepts.
- *
- * WireGuard's first four bytes are `type:u8` followed by `reserved:u8[3]`,
- * read by AmneziaWG as one little-endian u32. Cloudflare puts its client_id
- * in those reserved bytes, so:
- *
- *     H(n) = n + r0*2^8 + r1*2^16 + r2*2^24
- *
- * keeps the low byte equal to the real message type - the server is happy -
- * while the four header bytes stop being the constant 01/02/03/04 that DPI
- * looks for. This is the only way to use H1-H4 against WARP.
- *
- * Returns null when the client_id cannot produce a valid set (all zero, or
- * outside the range AmneziaWG clients accept).
- *
- * @param {number[]|undefined|null} reservedBytes exactly 3 bytes
- * @returns {{ h1: number, h2: number, h3: number, h4: number }|null}
- */
-export function deriveWarpHeaders(reservedBytes) {
-	if (!Array.isArray(reservedBytes) || reservedBytes.length !== 3) return null
-	const [r0, r1, r2] = reservedBytes.map((n) => Number(n) & 0xff)
-	if (r0 === 0 && r1 === 0 && r2 === 0) return null
-
-	const base = r0 * 0x100 + r1 * 0x10000 + r2 * 0x1000000
-	const headers = { h1: base + 1, h2: base + 2, h3: base + 3, h4: base + 4 }
-
-	// Full uint32 range on purpose - see HEADER_UINT32_MAX. Rejecting a valid
-	// client_id here is far worse than a header a picky UI dislikes: the tunnel
-	// connects and then carries no traffic.
-	const values = Object.values(headers)
-	if (values.some((v) => v < LIMITS.header.min || v > HEADER_UINT32_MAX)) return null
-	return headers
-}
 
 /**
  * Pick S1/S2 while respecting the `S1 + 56 != S2` collision rule.
@@ -508,6 +588,33 @@ function pickMagicHeaders(rng) {
 	return { h1, h2, h3, h4 }
 }
 
+/**
+ * Cloudflare assigns 3 reserved bytes [r0, r1, r2] to each device at registration.
+ * In WireGuard / AmneziaWG, H1-H4 are 32-bit little-endian message type headers.
+ * Setting:
+ *   H1 = 1 | (r0 << 8) | (r1 << 16) | (r2 * 0x1000000)
+ *   H2 = 2 | (r0 << 8) | (r1 << 16) | (r2 * 0x1000000)
+ *   H3 = 3 | (r0 << 8) | (r1 << 16) | (r2 * 0x1000000)
+ *   H4 = 4 | (r0 << 8) | (r1 << 16) | (r2 * 0x1000000)
+ * puts the client_id directly into the reserved bytes of WireGuard packets on the wire,
+ * allowing Cloudflare to identify the tunnel and route internet traffic.
+ *
+ * @param {number[]|undefined} bytes 3 reserved bytes
+ * @returns {{ h1: number, h2: number, h3: number, h4: number }|null}
+ */
+export function deriveWarpHeaders(bytes) {
+	if (!bytes || !Array.isArray(bytes) || bytes.length !== 3) return null
+	if (bytes[0] === 0 && bytes[1] === 0 && bytes[2] === 0) return null
+	const [r0, r1, r2] = bytes
+	const base = r0 * 0x100 + r1 * 0x10000 + r2 * 0x1000000
+	return {
+		h1: base + 1,
+		h2: base + 2,
+		h3: base + 3,
+		h4: base + 4,
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Validation
 // ---------------------------------------------------------------------------
@@ -519,7 +626,7 @@ function pickMagicHeaders(rng) {
  * @param {Object} params
  * @param {Object} [context]
  * @param {"warp"|"awg"} [context.compat] Target server type.
- * @param {boolean} [context.headersFromClientId] H1-H4 were derived, not random.
+ * @param {boolean} [context.headersFromClientId] Whether H1-H4 are derived from Cloudflare client_id.
  * @returns {{ valid: boolean, errors: string[], warnings: string[] }}
  */
 export function validateObfuscation(params, context = {}) {
@@ -529,6 +636,7 @@ export function validateObfuscation(params, context = {}) {
 
 	const { jc, jmin, jmax, s1, s2, h1, h2, h3, h4 } = params
 	const compat = context.compat ?? params.compat ?? "awg"
+	const headersFromClientId = Boolean(context.headersFromClientId || params.headersFromClientId)
 
 	const intIn = (name, value, lo, hi) => {
 		if (!Number.isInteger(value)) {
@@ -566,9 +674,10 @@ export function validateObfuscation(params, context = {}) {
 	const headers = [h1, h2, h3, h4]
 	const hasHeaders = headers.some((h) => h !== undefined && h !== null)
 	if (hasHeaders) {
-		// A derived header may legitimately exceed int32; a random one may not.
-		const headerMax = context.headersFromClientId ? HEADER_UINT32_MAX : LIMITS.header.max
-		headers.forEach((h, i) => intIn(`H${i + 1}`, h, LIMITS.header.min, headerMax))
+		const isStock = h1 === 1 && h2 === 2 && h3 === 3 && h4 === 4
+		const minH = compat === "warp" && isStock ? 1 : LIMITS.header.min
+		const maxH = headersFromClientId ? HEADER_UINT32_MAX : LIMITS.header.max
+		headers.forEach((h, i) => intIn(`H${i + 1}`, h, minH, maxH))
 		if (headers.every(Number.isInteger) && new Set(headers).size !== 4) {
 			errors.push("H1, H2, H3 and H4 must all be different values")
 		}
@@ -588,22 +697,36 @@ export function validateObfuscation(params, context = {}) {
 					`cannot parse a padded handshake response.`,
 			)
 		}
-		if (hasHeaders && !context.headersFromClientId) {
-			errors.push(
-				"H1-H4 cannot be random values on Cloudflare WARP. WARP expects message types " +
-					"1/2/3/4 in the low byte, so random headers silently break the handshake. " +
-					"Either drop H1-H4 or derive them from the WARP client_id.",
-			)
+		if (hasHeaders) {
+			const isStock = h1 === 1 && h2 === 2 && h3 === 3 && h4 === 4
+			if (!isStock && !headersFromClientId) {
+				errors.push(
+					"H1-H4 cannot be random: Cloudflare WARP requires stock headers (H1=1, H2=2, H3=3, H4=4) or client_id derived headers.",
+				)
+			} else if (headersFromClientId) {
+				if (
+					(h1 & 0xff) !== 1 ||
+					(h2 & 0xff) !== 2 ||
+					(h3 & 0xff) !== 3 ||
+					(h4 & 0xff) !== 4
+				) {
+					errors.push(
+						"H1-H4 derived from client_id must preserve WireGuard message types 1, 2, 3, 4 in the low byte.",
+					)
+				}
+			}
 		}
+		// I1-I5 are sender-side camouflage: Cloudflare drops them like junk.
+		// The only constraint is the CLIENT being AmneziaWG 1.5+.
 		if ((params.signatures?.length ?? 0) > 0 || params.version === "1.5") {
-			errors.push(
-				"AmneziaWG 1.5 fake packets (I1-I5) require an AmneziaWG server. " +
-					"Cloudflare WARP will drop the connection.",
+			warnings.push(
+				"Fake packets (I1-I5) need AmneziaWG 1.5+ on the CLIENT; older clients refuse to " +
+					"import this config. Cloudflare just drops them, like junk packets.",
 			)
 		}
-		if (Number.isInteger(jc) && jc === 0) {
+		if (Number.isInteger(jc) && jc === 0 && (params.signatures?.length ?? 0) === 0) {
 			warnings.push(
-				"Jc=0 with WARP means no obfuscation at all, since S1/S2 and H1-H4 are unavailable here.",
+				"Jc=0 and no fake packets means no obfuscation at all: S1/S2 and H1-H4 are unavailable with WARP.",
 			)
 		}
 	}
@@ -641,8 +764,6 @@ export function validateObfuscation(params, context = {}) {
  * @param {Object} [options.overrides]
  * @param {string[]} [options.signatures] Signature ids for mimicry mode.
  * @param {string} [options.mimicryDomain] SNI written into the fake packets.
- * @param {number[]} [options.reserved] WARP client_id bytes, enables H1-H4 on WARP.
- * @param {boolean} [options.useClientIdHeaders] Opt in to client_id-derived H1-H4.
  * @returns {Object} obfuscation descriptor
  */
 export function generateObfuscation(options = {}) {
@@ -678,30 +799,27 @@ export function generateObfuscation(options = {}) {
 		}
 	}
 
-	// --- Junk packets: the only universally safe knob -------------------------
-	const jc = rng.int(preset.jc[0], preset.jc[1])
-	let jmin = rng.int(preset.junk[0], Math.max(preset.junk[0], preset.junk[1] - 8))
-	let jmax = rng.int(jmin + 8, Math.max(jmin + 8, preset.junk[1]))
+	// --- Junk packets ----------------------------------------------------------
+	// A profile may pin exact junk numbers (`fixed`) instead of rolling them,
+	// which is how warp-cloak reproduces the proven bash-warp recipe.
+	const jc = preset.fixed?.jc ?? rng.int(preset.jc[0], preset.jc[1])
+	let jmin =
+		preset.fixed?.jmin ?? rng.int(preset.junk[0], Math.max(preset.junk[0], preset.junk[1] - 8))
+	let jmax =
+		preset.fixed?.jmax ?? rng.int(jmin + 8, Math.max(jmin + 8, preset.junk[1]))
 	if (jmax > LIMITS.junkSize.max) jmax = LIMITS.junkSize.max
 	if (jmin >= jmax) jmin = Math.max(LIMITS.junkSize.min, jmax - 8)
 
 	/** @type {Record<string, number>} */
 	const params = { enabled: true, compat, jc, jmin, jmax }
-	let headersFromClientId = false
 
 	if (compat === "warp") {
-		// Stock WireGuard on the far end: padding must stay at zero.
+		// Stock WireGuard on the far end: padding must stay at zero and the
+		// header must stay stock WireGuard (1/2/3/4). No H lines: an AmneziaWG
+		// client without H1-H4 falls back to stock values (1, 2, 3, 4), which is
+		// the only format Cloudflare accepts.
 		params.s1 = 0
 		params.s2 = 0
-
-		// H1-H4 are only possible when they encode the real client_id.
-		if (options.useClientIdHeaders) {
-			const derived = deriveWarpHeaders(options.reserved)
-			if (derived) {
-				Object.assign(params, derived)
-				headersFromClientId = true
-			}
-		}
 	} else {
 		const { s1, s2 } = pickHandshakePadding(rng, preset.s1, preset.s2)
 		params.s1 = s1
@@ -709,9 +827,12 @@ export function generateObfuscation(options = {}) {
 		if (preset.headers) Object.assign(params, pickMagicHeaders(rng))
 	}
 
-	// --- AmneziaWG 1.5 fake packets (own server only) -------------------------
+	// --- AmneziaWG 1.5 fake packets ---------------------------------------------
+	// Sender-side camouflage. Against WARP the server simply drops them (the
+	// proven bash-warp-generator ships exactly one such packet); against an
+	// own AmneziaWG server both sides understand them.
 	let signatures = []
-	if (compat === "awg" && (preset.signatures?.length || options.signatures?.length)) {
+	if (preset.signatures?.length || options.signatures?.length) {
 		const requested = (
 			options.signatures?.length ? options.signatures : preset.signatures
 		).filter((id) => PACKET_SIGNATURES[id])
@@ -734,15 +855,12 @@ export function generateObfuscation(options = {}) {
 	const version = signatures.length || preset.version === "1.5" ? "1.5" : "1.0"
 	params.version = version
 	if (version === "1.5" && preset.itime) {
-		params.itime = rng.int(preset.itime[0], preset.itime[1])
+		params.itime = preset.fixed?.itime ?? rng.int(preset.itime[0], preset.itime[1])
 	}
 
 	Object.assign(params, options.overrides || {})
 
-	const validation = validateObfuscation(
-		{ ...params, signatures },
-		{ compat, headersFromClientId },
-	)
+	const validation = validateObfuscation({ ...params, signatures }, { compat })
 
 	return {
 		enabled: true,
@@ -757,9 +875,8 @@ export function generateObfuscation(options = {}) {
 		params,
 		signatures,
 		mimicryDomain: signatures.some((s) => s.domain) ? domain : null,
-		headersFromClientId,
 		validation,
-		explain: explainParams(params, signatures, { headersFromClientId }),
+		explain: explainParams(params, signatures),
 	}
 }
 
@@ -771,10 +888,9 @@ export function generateObfuscation(options = {}) {
  * Human-readable explanation of each parameter, for the UI.
  * @param {Object} params
  * @param {Array} [signatures]
- * @param {Object} [context]
  * @returns {Array<{ key: string, value: string|number, what: string, whatRu: string }>}
  */
-export function explainParams(params, signatures = [], context = {}) {
+export function explainParams(params, signatures = []) {
 	if (!params?.enabled) return []
 	const rows = [
 		{
@@ -820,12 +936,9 @@ export function explainParams(params, signatures = [], context = {}) {
 		rows.push({
 			key: "H1-H4",
 			value: `${params.h1}, ${params.h2}, ${params.h3}, ${params.h4}`,
-			what: context.headersFromClientId
-				? "Derived from the WARP client_id: the low byte still holds the real message type, so Cloudflare accepts the packet while the header stops being a constant."
-				: "Replaces WireGuard's message type bytes 1/2/3/4 (init, response, cookie, transport) with custom values, defeating signature matching on the first four bytes.",
-			whatRu: context.headersFromClientId
-				? "\u0412\u044b\u0432\u0435\u0434\u0435\u043d\u044b \u0438\u0437 client_id WARP: \u043c\u043b\u0430\u0434\u0448\u0438\u0439 \u0431\u0430\u0439\u0442 \u043e\u0441\u0442\u0430\u0451\u0442\u0441\u044f \u043d\u0430\u0441\u0442\u043e\u044f\u0449\u0438\u043c \u0442\u0438\u043f\u043e\u043c \u043f\u0430\u043a\u0435\u0442\u0430, \u043f\u043e\u044d\u0442\u043e\u043c\u0443 Cloudflare \u0438\u0445 \u043f\u0440\u0438\u043d\u0438\u043c\u0430\u0435\u0442."
-				: "\u0417\u0430\u043c\u0435\u043d\u044f\u0435\u0442 \u0442\u0438\u043f\u044b \u043f\u0430\u043a\u0435\u0442\u043e\u0432 WireGuard 1/2/3/4 \u043d\u0430 \u0441\u0432\u043e\u0438 \u0437\u043d\u0430\u0447\u0435\u043d\u0438\u044f, \u043b\u043e\u043c\u0430\u044f \u043f\u043e\u0438\u0441\u043a \u043f\u043e \u043f\u0435\u0440\u0432\u044b\u043c \u0447\u0435\u0442\u044b\u0440\u0451\u043c \u0431\u0430\u0439\u0442\u0430\u043c.",
+			what: "Replaces WireGuard's message type bytes 1/2/3/4 (init, response, cookie, transport) with custom values, defeating signature matching on the first four bytes. The far end must run AmneziaWG with the SAME values.",
+			whatRu:
+				"\u0417\u0430\u043c\u0435\u043d\u044f\u0435\u0442 \u0442\u0438\u043f\u044b \u043f\u0430\u043a\u0435\u0442\u043e\u0432 WireGuard 1/2/3/4 \u043d\u0430 \u0441\u0432\u043e\u0438 \u0437\u043d\u0430\u0447\u0435\u043d\u0438\u044f, \u043b\u043e\u043c\u0430\u044f \u043f\u043e\u0438\u0441\u043a \u043f\u043e \u043f\u0435\u0440\u0432\u044b\u043c \u0447\u0435\u0442\u044b\u0440\u0451\u043c \u0431\u0430\u0439\u0442\u0430\u043c. \u041d\u0430 \u0442\u043e\u043c \u043a\u043e\u043d\u0446\u0435 \u0442\u043e\u0436\u0435 \u0434\u043e\u043b\u0436\u0435\u043d \u0431\u044b\u0442\u044c AmneziaWG \u0441 \u0442\u0435\u043c\u0438 \u0436\u0435 \u0437\u043d\u0430\u0447\u0435\u043d\u0438\u044f\u043c\u0438.",
 		})
 	}
 

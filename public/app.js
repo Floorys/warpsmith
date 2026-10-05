@@ -6,6 +6,8 @@
  * presentation plus a live preview of obfuscation parameters.
  */
 
+import { GROUP_PARAM_DOCS } from "./param-docs.js"
+
 const $ = (id) => document.getElementById(id)
 
 // ------------------------------------------------------------------- i18n
@@ -48,6 +50,10 @@ const I18N = {
 		"srv.hosted":
 			"Сканирование выполняется на сервере{region}, поэтому оно измеряет дата-центр хостинга, а не ваш. Для своих цифр запустите генератор локально: npm start.",
 		"obf.title": "Обфускация",
+		"obf.modeWarp": "Для Cloudflare WARP",
+		"obf.modeWarpSub": "Junk-мусор, без паддинга (гарантия связи)",
+		"obf.modeAwg": "Для своего сервера (AmneziaWG)",
+		"obf.modeAwgSub": "S1/S2, H1–H4, полная маскировка VPS",
 		"obf.reroll": "Перегенерировать",
 		"obf.params": "Сгенерированные параметры",
 		"obf.plain": "чистый WireGuard",
@@ -67,7 +73,7 @@ const I18N = {
 		"mim.domainUnused": "Выбранные протоколы не используют домен.",
 		"mim.needOne": "Выберите хотя бы один протокол.",
 		"net.title": "Сеть",
-		"net.routing": "��аршрутизация",
+		"net.routing": "Маршрутизация",
 		"net.mtu": "MTU канала",
 		"net.keepalive": "Keepalive (секунды)",
 		"net.keepaliveHint": "0 отключает. 25 держит NAT открытым на мобильном.",
@@ -95,6 +101,20 @@ const I18N = {
 		"out.copyFail": "Буфер обмена заблокирован — выделите текст вручную",
 		"out.downloaded": "Скачано {name}",
 		"out.generated": "Конфиг создан",
+		"scout.title": "⚡ WarpScout Endpoint Scanner",
+		"scout.desc": "Автосканер рабочих Cloudflare WARP IP и портов с поддержкой WireGuard / MASQUE и обходом ТСПУ.",
+		"scout.proto": "Протокол проверки",
+		"scout.sni": "SNI маскировки",
+		"scout.scanBtn": "⚡ Найти живые IP",
+		"scout.scanning": "Сканирую IP…",
+		"scout.importTitle": "Вставить лог WarpScout или IP вручную",
+		"scout.importBtn": "Импортировать IP",
+		"scout.pick": "Выбрать",
+		"scout.none": "Живых IP не найдено.",
+		"scout.found": "Найдено живых эндпоинтов: {n}. Нажмите, чтобы выбрать.",
+		"scout.imported": "Импортировано эндпоинтов: {n}",
+		"scout.pinned": "Выбран эндпоинт {ep}",
+		"mim.sniNote": "Подмена SNI: Пакеты первичного рукопожатия маскируются под легитимный HTTPS/QUIC трафик (например, Apple или Microsoft). Системы ТСПУ/DPI видят разрешённое доменное имя в заголовках и пропускают соединение.",
 		"sum.endpoint": "Endpoint",
 		"sum.exit": "Точка выхода",
 		"sum.exitUnknown": "не удалось измерить",
@@ -104,7 +124,7 @@ const I18N = {
 		"sum.obf": "Обфускация",
 		"sum.mimicry": "Маскировка",
 		"sum.seed": "Seed",
-		footer: "Самостоятельный хостинг. Конфиги создаются по запросу и не сохраняются на диск. Держите PrivateKey в секрете.",
+		"footer": "Самостоятельный хостинг. Конфиги создаются по запросу и не сохраняются на диск. Держите PrivateKey в секрете.",
 	},
 	en: {
 		"brand.sub": "WARP + AmneziaWG config builder",
@@ -143,6 +163,10 @@ const I18N = {
 		"srv.hosted":
 			"The scan runs on the server{region}, so it measures the hosting datacenter, not yours. Run the generator locally for your own numbers: npm start.",
 		"obf.title": "Obfuscation",
+		"obf.modeWarp": "For Cloudflare WARP",
+		"obf.modeWarpSub": "Junk packets, no padding (guaranteed connection)",
+		"obf.modeAwg": "For custom server (AmneziaWG)",
+		"obf.modeAwgSub": "S1/S2, H1–H4, full VPS camouflage",
 		"obf.reroll": "Re-roll values",
 		"obf.params": "Generated parameters",
 		"obf.plain": "plain WireGuard",
@@ -190,6 +214,20 @@ const I18N = {
 		"out.copyFail": "Clipboard blocked — select the text manually",
 		"out.downloaded": "Downloaded {name}",
 		"out.generated": "Config generated",
+		"scout.title": "⚡ WarpScout Endpoint Scanner",
+		"scout.desc": "Auto-scanner for alive Cloudflare WARP IPs and ports with WireGuard / MASQUE support and DPI evasion.",
+		"scout.proto": "Test protocol",
+		"scout.sni": "SNI spoofing domain",
+		"scout.scanBtn": "⚡ Find alive IPs",
+		"scout.scanning": "Scanning IPs…",
+		"scout.importTitle": "Paste WarpScout log or custom IPs manually",
+		"scout.importBtn": "Import IPs",
+		"scout.pick": "Pick",
+		"scout.none": "No alive endpoints found.",
+		"scout.found": "Found alive endpoints: {n}. Click one to select it.",
+		"scout.imported": "Imported endpoints: {n}",
+		"scout.pinned": "Selected endpoint {ep}",
+		"mim.sniNote": "SNI Spoofing: Initial handshake packets are disguised as legitimate HTTPS/QUIC traffic (e.g. Apple or Microsoft). DPI/censorship filters inspect the header domain name and allow the connection.",
 		"sum.endpoint": "Endpoint",
 		"sum.exit": "Exit",
 		"sum.exitUnknown": "could not be measured",
@@ -199,14 +237,15 @@ const I18N = {
 		"sum.obf": "Obfuscation",
 		"sum.mimicry": "Mimicry",
 		"sum.seed": "Seed",
-		footer: "Self-hosted. Configs are generated on request and never stored on disk. Keep your PrivateKey secret.",
+		"footer": "Self-hosted. Configs are generated on request and never stored on disk. Keep your PrivateKey secret.",
 	},
 }
 
 const state = {
 	lang: localStorage.getItem("awg-lang") || "ru",
 	options: null,
-	profile: "warp-balanced",
+	profile: "warp-cloak",
+	compatMode: "warp",
 	signatures: [],
 	mimicryDomain: "",
 	obfuscation: null,
@@ -371,6 +410,8 @@ async function init() {
 		state.options = options
 		state.profile = options.defaultProfile || state.profile
 		state.mimicryDomain = options.defaultMimicryDomain || ""
+		const initProf = options.obfuscationProfiles?.find((p) => p.id === state.profile)
+		if (initProf) state.compatMode = initProf.compat || "warp"
 
 		$("healthBadge").textContent = t("badge.ready")
 		$("healthBadge").className = "pill pill--ok"
@@ -380,6 +421,7 @@ async function init() {
 		// Fire and forget: the browser measurement is the honest one, but it must
 		// never block the rest of the UI from booting.
 		detectViewerColo()
+		checkScoutStatus()
 
 		renderLocality(options.locationReality)
 		renderPrefixes(options.endpointPrefixes)
@@ -446,55 +488,68 @@ function currentProfile() {
 	return state.options?.obfuscationProfiles.find((p) => p.id === state.profile)
 }
 
+function setCompatMode(mode) {
+	state.compatMode = mode
+	$("obfModeWarp")?.classList.toggle("is-active", mode === "warp")
+	$("obfModeAwg")?.classList.toggle("is-active", mode === "awg")
+
+	const curProfile = currentProfile()
+	if (!curProfile || (curProfile.compat || "warp") !== mode) {
+		state.profile = mode === "awg" ? "awg-standard" : "warp-balanced"
+		state.overrides = {}
+	}
+
+	if (state.options?.obfuscationProfiles) {
+		renderProfiles(state.options.obfuscationProfiles)
+	}
+	updateCompatNote()
+	refreshObfuscation()
+}
+
 /**
- * Profiles are grouped by what they are compatible with, because mixing them
- * up is exactly what produces a config that imports fine and never connects.
+ * Filter and render profiles according to the chosen mode (WARP vs own server).
  */
 function renderProfiles(profiles) {
 	const wrap = $("profiles")
 	wrap.replaceChildren()
 
-	const groups = state.options?.compat || []
-	const order = groups.length ? groups : [{ id: "warp" }, { id: "awg" }]
+	const currentMode = state.compatMode || "warp"
+	$("obfModeWarp")?.classList.toggle("is-active", currentMode === "warp")
+	$("obfModeAwg")?.classList.toggle("is-active", currentMode === "awg")
 
-	for (const group of order) {
-		const inGroup = profiles.filter((p) => (p.compat || "warp") === group.id)
-		if (!inGroup.length) continue
+	const inGroup = profiles.filter((p) => (p.compat || "warp") === currentMode)
 
-		if (group.label || group.labelRu) {
-			wrap.append(el("div", "profiles__group", pickText(group, "label")))
+	for (const p of inGroup) {
+		const label = el("label", "profile")
+		if (p.id === state.profile) label.classList.add("is-active")
+
+		const input = document.createElement("input")
+		input.type = "radio"
+		input.name = "obfProfile"
+		input.value = p.id
+		input.checked = p.id === state.profile
+
+		const body = el("div", "profile__body")
+		const name = el("div", "profile__name")
+		name.append(el("span", null, pickText(p, "label")))
+		if (p.version === "1.5") name.append(el("span", "tag", "AWG 1.5"))
+		if (p.worksWithWarp === false) {
+			name.append(el("span", "tag tag--warn", state.lang === "en" ? "Custom VPS" : "Свой сервер"))
 		}
+		body.append(name, el("div", "profile__desc", pickText(p, "summary")))
 
-		for (const p of inGroup) {
-			const label = el("label", "profile")
-			if (p.id === state.profile) label.classList.add("is-active")
+		label.append(input, body)
+		wrap.append(label)
 
-			const input = document.createElement("input")
-			input.type = "radio"
-			input.name = "obfProfile"
-			input.value = p.id
-			input.checked = p.id === state.profile
-
-			const body = el("div", "profile__body")
-			const name = el("div", "profile__name")
-			name.append(el("span", null, pickText(p, "label")))
-			if (p.version === "1.5") name.append(el("span", "tag", "AWG 1.5"))
-			if (p.worksWithWarp === false) name.append(el("span", "tag tag--warn", "≠ WARP"))
-			body.append(name, el("div", "profile__desc", pickText(p, "summary")))
-
-			label.append(input, body)
-			wrap.append(label)
-
-			input.addEventListener("change", async () => {
-				state.profile = p.id
-				state.overrides = {}
-				for (const node of wrap.querySelectorAll(".profile")) {
-					node.classList.toggle("is-active", node.contains(input))
-				}
-				updateCompatNote()
-				await refreshObfuscation()
-			})
-		}
+		input.addEventListener("change", async () => {
+			state.profile = p.id
+			state.overrides = {}
+			for (const node of wrap.querySelectorAll(".profile")) {
+				node.classList.toggle("is-active", node.contains(input))
+			}
+			updateCompatNote()
+			await refreshObfuscation()
+		})
 	}
 }
 
@@ -894,6 +949,122 @@ async function runScan() {
 	}
 }
 
+// ------------------------------------------------------------- warpscout
+
+async function checkScoutStatus() {
+	const badge = $("scoutBinaryBadge")
+	if (!badge) return
+	try {
+		const status = await api("/api/scout/status")
+		if (status.installed) {
+			badge.textContent = `WarpScout v${status.version || "1.x"}`
+			badge.className = "pill pill--ok"
+		} else {
+			badge.textContent = state.lang === "en" ? "Native engine" : "Встроенный сканер"
+			badge.className = "pill pill--muted"
+		}
+	} catch {
+		badge.textContent = state.lang === "en" ? "Native engine" : "Встроенный сканер"
+	}
+}
+
+function renderScoutItem(ep) {
+	const item = el("div", "scout__item")
+	const epSpan = el("span", "scout__ep", ep.endpoint)
+	const rttSpan = el(
+		"span",
+		"scout__ping",
+		ep.rttMs != null ? `${ep.rttMs} ms` : ep.loss != null ? `${ep.loss}% loss` : "",
+	)
+	const locSpan = el(
+		"span",
+		"scout__loc",
+		ep.colo ? `${ep.colo}${ep.city ? ` · ${ep.city}` : ""}` : "",
+	)
+
+	const pickBtn = el("button", "btn btn--ghost btn--sm", t("scout.pick"))
+	pickBtn.type = "button"
+	pickBtn.addEventListener("click", () => {
+		$("endpointHost").value = ep.endpoint
+		toast(t("scout.pinned", { ep: ep.endpoint }))
+	})
+
+	item.append(epSpan, rttSpan, locSpan, pickBtn)
+	return item
+}
+
+async function runScoutScan() {
+	const btn = $("scoutScanBtn")
+	if (!btn) return
+	setBusy(btn, true, t("scout.scanning"))
+	const statusEl = $("scoutStatus")
+	const listEl = $("scoutList")
+	statusEl.hidden = false
+	statusEl.textContent = t("scout.scanning")
+	listEl.hidden = true
+	listEl.replaceChildren()
+
+	try {
+		const proto = $("scoutProto")?.value || "wireguard"
+		const sni = $("scoutSni")?.value.trim() || "www.apple.com"
+		const result = await api("/api/scout/scan", {
+			proto,
+			sni,
+			count: 10,
+		})
+
+		const endpoints = result.endpoints || []
+		if (!endpoints.length) {
+			statusEl.textContent = t("scout.none")
+			return
+		}
+
+		statusEl.textContent = t("scout.found", { n: endpoints.length })
+		listEl.hidden = false
+		for (const ep of endpoints) {
+			listEl.append(renderScoutItem(ep))
+		}
+		if (endpoints[0]) {
+			$("endpointHost").value = endpoints[0].endpoint
+			toast(t("scout.pinned", { ep: endpoints[0].endpoint }))
+		}
+	} catch (err) {
+		statusEl.textContent = err.message || "Scan failed"
+	} finally {
+		setBusy(btn, false)
+	}
+}
+
+async function importScoutResults() {
+	const text = $("scoutImportText")?.value.trim()
+	if (!text) return
+	const statusEl = $("scoutStatus")
+	const listEl = $("scoutList")
+
+	try {
+		const result = await api("/api/scout/import", { text })
+		const endpoints = result.endpoints || []
+		if (!endpoints.length) {
+			toast(t("scout.none"), "error")
+			return
+		}
+
+		statusEl.hidden = false
+		statusEl.textContent = t("scout.imported", { n: endpoints.length })
+		listEl.hidden = false
+		listEl.replaceChildren()
+		for (const ep of endpoints) {
+			listEl.append(renderScoutItem(ep))
+		}
+		if (endpoints[0]) {
+			$("endpointHost").value = endpoints[0].endpoint
+			toast(t("scout.pinned", { ep: endpoints[0].endpoint }))
+		}
+	} catch (err) {
+		toast(err.message, "error")
+	}
+}
+
 // ---------------------------------------------------------------- generate
 
 async function generate() {
@@ -916,6 +1087,7 @@ async function generate() {
 			obfuscationOverrides: hasOverrides ? state.overrides : undefined,
 			signatures: useMimicry && state.signatures.length ? state.signatures : undefined,
 			mimicryDomain: useMimicry ? resolvedDomain() : undefined,
+			sni: resolvedDomain() || undefined,
 			seed: $("seed").value.trim() || undefined,
 			privateKey: $("privateKey").value.trim() || undefined,
 			license: $("license").value.trim() || undefined,
@@ -956,9 +1128,9 @@ function highlight(text) {
 	return escaped
 		.split("\n")
 		.map((line) => {
-			if (line.startsWith("#")) return `<span class="c-comment">${line}</span>`
+			if (line.trim().startsWith("#") || line.trim().startsWith("//")) return `<span class="c-comment">${line}</span>`
 			if (/^\[.+\]$/.test(line.trim())) return `<span class="c-section">${line}</span>`
-			const match = line.match(/^([A-Za-z0-9]+)(\s*=\s*)(.*)$/)
+			const match = line.match(/^(\s*["']?[A-Za-z0-9_-]+["']?)(\s*[:=]\s*)(.*)$/)
 			if (match) {
 				return `<span class="c-key">${match[1]}</span>${match[2]}${match[3]}`
 			}
@@ -970,6 +1142,7 @@ function highlight(text) {
 function renderOutput() {
 	if (!state.result) return
 	const config = state.result.configs[state.tab]
+	if (!config) return
 
 	$("emptyState").hidden = true
 	$("configOut").hidden = false
@@ -1028,6 +1201,10 @@ function wire() {
 
 	$("generateBtn").addEventListener("click", generate)
 	$("scanBtn").addEventListener("click", runScan)
+	$("scoutScanBtn")?.addEventListener("click", runScoutScan)
+	$("scoutImportBtn")?.addEventListener("click", importScoutResults)
+	$("obfModeWarp")?.addEventListener("click", () => setCompatMode("warp"))
+	$("obfModeAwg")?.addEventListener("click", () => setCompatMode("awg"))
 
 	$("rerollBtn").addEventListener("click", () => {
 		$("seed").value = ""
@@ -1239,8 +1416,8 @@ const FAQ = [
 			en: "The tunnel connects but there is no internet. What is wrong?",
 		},
 		a: {
-			ru: "Cloudflare узнаёт вашу сессию по client_id — трём «зарезервированным» байтам в заголовке каждого пакета. Их выдают при регистрации, и официальный клиент WARP проставляет их всегда. Без них рукопожатие всё равно проходит: клиент показывает зелёный статус и свежий handshake, а обратно не приходит ни одного пакета. Именно так выглядит «подключение есть, интернета нет». Генератор теперь всегда зашивает client_id в H1–H4: младший байт остаётся настоящим типом пакета (1, 2, 3 или 4), поэтому Cloudflare пакет принимает, а заголовок перестаёт быть константой. Откройте свой конфиг: если в нём нет строк H1–H4, он старый — перегенерируйте.",
-			en: "Cloudflare identifies your session by its client_id, three reserved bytes in the header of every packet. It is handed out at registration and the official WARP client always sets it. Without it the handshake still succeeds: the client shows a green status and a fresh handshake, and not a single packet comes back. That is exactly what \"connected, but no internet\" looks like. The generator now always folds the client_id into H1–H4: the low byte stays the real message type (1, 2, 3 or 4), so Cloudflare accepts the packet while the header stops being a constant. Open your config: if it has no H1–H4 lines it is an old one, so regenerate it.",
+			ru: "У такой ситуации две типовые причины. Первая: старый конфиг с H1–H4, выведенными из client_id — рукопожатие Cloudflare принимало, но ответы сервера приходили со штатным заголовком, который AmneziaWG с кастомными H отбрасывал. Такие конфиги больше не генерируются: если у вас есть строки H1–H4 с большими числами — перегенерируйте. Вторая: MTU. Уменьшите MTU до 1280. За client_id переживать не нужно: AmneziaWG его не использует вовсе, а клиенты, которым он нужен (warp-plus, sing-box), читают его из JSON-экспорта.",
+			en: "There are two usual causes. First: an old config carrying H1-H4 derived from the client_id — Cloudflare accepted the handshake, but the server's replies came back with the stock header, which an AmneziaWG client with custom H values drops. Such configs are no longer generated: if yours has H1-H4 lines with large numbers, regenerate it. Second: MTU. Lower the MTU to 1280. The client_id is not something to worry about: AmneziaWG never uses it, and clients that need it (warp-plus, sing-box) read it from the JSON export.",
 		},
 	},
 	{
@@ -1259,8 +1436,8 @@ const FAQ = [
 			en: "The config imports fine but the tunnel never connects. Why?",
 		},
 		a: {
-			ru: "Почти всегда потому, что в конфиге есть S1/S2 или H1–H4, а сервер — Cloudflare WARP. WARP работает на стоковом WireGuard: паддинг S1/S2 лежит внутри пакетов рукопожатия и меняет их длину, а H1–H4 подменяют байт типа сообщения, который сервер ждёт равным 1, 2, 3 или 4. Клиент такой конфиг примет, от��равит рукопожатие — и не получит ответа. Выбирайте профили warp-*: в них только junk-пакеты.",
-			en: "Almost always because the config carries S1/S2 or H1–H4 while the server is Cloudflare WARP. WARP runs stock WireGuard: S1/S2 padding sits inside the handshake packets and changes their length, and H1–H4 replace the message type byte the server expects to be 1, 2, 3 or 4. The client accepts such a config, sends the handshake, and gets nothing back. Pick the warp-* profiles: they only use junk packets.",
+			ru: "Почти всегда потому, что в конфиге есть S1/S2 или H1–H4, а сервер — Cloudflare WARP. WARP работает на стоковом WireGuard: паддинг S1/S2 лежит внутри пакетов рукопожатия и меняет их длину, а H1–H4 подменяют весь четырёхбайтовый заголовок, который сервер ждёт равным ровно 1, 2, 3 или 4. Клиент такой конфиг примет, отправит рукопожатие — и не получит ответа. ВЫВОД ИЗ client_id тут не помогает и никогда не помогал: ответы сервера всегда приходят со штатным заголовком, который AmneziaWG с кастомными H молча отбрасывает. Выбирайте профили warp-*: в них только junk-пакеты (и опционально I1–I5).",
+			en: "Almost always because the config carries S1/S2 or H1–H4 while the server is Cloudflare WARP. WARP runs stock WireGuard: S1/S2 padding sits inside the handshake packets and changes their length, and H1–H4 replace the whole 4-byte header the server expects to be exactly 1, 2, 3 or 4. The client accepts such a config, sends the handshake, and gets nothing back. Deriving them from the client_id does NOT help and never did: the server's replies always come back with the stock header, which an AmneziaWG client with custom H values silently drops. Pick the warp-* profiles: they only use junk packets (and optionally I1-I5).",
 		},
 	},
 	{
@@ -1320,8 +1497,8 @@ const FAQ = [
 			en: "Can H1–H4 be used with WARP at all?",
 		},
 		a: {
-			ru: "Только в одном частном случае: если вывести их из client id вашей регистрации WARP по формуле H(n) = n + r0·2⁸ + r1·2¹⁶ + r2·2²⁴, где r — три байта reserved. Тогда старший байт остаётся равным номеру типа сообщения, и сервер по-прежнему видит 1, 2, 3, 4. Это включается флагом --client-id-headers и по умолчанию выключено, потому что случайные H1–H4 туннель гарантированно ломают.",
-			en: "Only in one special case: derive them from your WARP registration's client id as H(n) = n + r0·2⁸ + r1·2¹⁶ + r2·2²⁴, where r is the three reserved bytes. The low byte then still equals the message type, so the server keeps seeing 1, 2, 3, 4. This is enabled with --client-id-headers and off by default, because random H1–H4 break the tunnel for certain.",
+			ru: "Нет, и это принципиально. Первые 4 байта пакета WireGuard — это тип плюс три зарезервированных байта, и обе стороны читают их как одно 32-битное число. Cloudflare принимает только ровно 1, 2, 3, 4 — и её собственные ответы всегда уходят со штатным заголовком. AmneziaWG-клиент с кастомными H1–H4 проверяет весь заголовок входящих пакетов и молча отбрасывает каждый ответ сервера: рукопожатие крутится до таймаута. Раньше здесь был «безопасный» вывод из client id — это была ошибка: он помогает отправляемым пакетам, но убивает принимаемые. Конфиг без строк H1–H4 эквивалентен H1=1, H2=2, H3=3, H4=4 — и именно так работают все живые WARP-конфиги.",
+			en: "No, and that is fundamental. The first 4 bytes of a WireGuard packet are the type plus three reserved bytes, and both sides read them as a single 32-bit number. Cloudflare accepts only exactly 1, 2, 3, 4 - and its own replies always go out with the stock header. An AmneziaWG client with custom H1-H4 validates the whole header of incoming packets and silently drops every server reply: the handshake spins until timeout. The old \"client_id-derived headers\" idea was a mistake: it helped outgoing packets but killed the incoming ones. A config without H1-H4 lines is equivalent to H1=1, H2=2, H3=3, H4=4 - and that is exactly how every working WARP config operates.",
 		},
 	},
 ]
@@ -1746,8 +1923,6 @@ showView(location.hash.slice(1) || "gen")
  * param-docs.js, keyed by the lowercased row label so docFor() finds them
  * without any extra lookup logic.
  */
-import { GROUP_PARAM_DOCS } from "./param-docs.js"
-
 Object.assign(PARAM_DOCS, GROUP_PARAM_DOCS)
 
 /* ------------------------------------------------------- generator steps */

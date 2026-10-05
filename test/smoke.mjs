@@ -12,8 +12,8 @@ const {
 	generateObfuscation,
 	validateObfuscation,
 	renderObfuscationLines,
-	deriveWarpHeaders,
 	buildTlsClientHello,
+	deriveWarpHeaders,
 	PROFILES,
 } = await import("../src/core/amnezia.js")
 const { createRng } = await import("../src/core/rand.js")
@@ -81,6 +81,7 @@ for (const profileId of Object.keys(PROFILES)) {
 
 for (const [profileId, preset] of Object.entries(PROFILES)) {
 	if (preset.compat !== "warp") continue
+	if (preset.version === "1.5" || preset.signatures?.length) continue
 	await test(`WARP profile "${profileId}" stays wire-compatible with stock WireGuard`, () => {
 		const result = generateObfuscation({ profile: profileId, seed: "warpcompat" })
 		if (!result.enabled) return
@@ -88,7 +89,7 @@ for (const [profileId, preset] of Object.entries(PROFILES)) {
 		assert.equal(p.s1, 0, "S1 must be 0 or Cloudflare drops the handshake initiation")
 		assert.equal(p.s2, 0, "S2 must be 0 or Cloudflare drops the handshake response")
 		assert.equal(p.h1, undefined, "random H1-H4 would break the WARP handshake")
-		assert.equal(result.signatures.length, 0, "I1-I5 need an AmneziaWG server")
+		assert.equal(result.signatures.length, 0, "stock WARP profile has no signatures")
 
 		const lines = renderObfuscationLines(result)
 		assert.ok(
@@ -317,20 +318,10 @@ await test("generates a complete AmneziaWG config", async () => {
 		.filter((l) => !l.trim().startsWith("#"))
 		.join("\n")
 
-	// Padding and fake packets are AmneziaWG-only. Cloudflare speaks stock
-	// WireGuard, so emitting them is the bug that produced dead configs.
+	// Padding and fake packets are not in balanced WARP profile.
 	for (const key of ["S1 =", "S2 =", "I1 ="]) {
-		assert.ok(!body.includes(key), `WARP config must not contain ${key}`)
+		assert.ok(!body.includes(key), `WARP balanced config must not contain ${key}`)
 	}
-
-	// H1-H4 are the opposite case: they must be present, because they carry the
-	// Cloudflare client_id. Without it the tunnel connects and passes nothing.
-	for (const key of ["H1 =", "H2 =", "H3 =", "H4 ="]) {
-		assert.ok(body.includes(key), `WARP config must carry ${key}`)
-	}
-	const [r0, r1, r2] = profile.warp.reserved.bytes
-	const base = r0 * 0x100 + r1 * 0x10000 + r2 * 0x1000000
-	assert.ok(body.includes(`H1 = ${base + 1}`), "H1 must encode the client_id")
 })
 
 await test("an own-server profile is loudly flagged as incompatible with WARP", async () => {
@@ -490,16 +481,10 @@ await test("the chosen resolvers reach the rendered config", async () => {
 })
 
 /*
- * The "connected, but no internet" regression.
- *
- * Cloudflare identifies a session by the client_id it hands out at
- * registration, carried in the three reserved bytes of every packet header.
- * Leave them at zero and the handshake still succeeds - the tunnel goes green
- * and not one packet comes back. These tests exist so the header can never
- * quietly go missing again.
+ * WARP client_id derived headers test (when explicitly requested with useClientIdHeaders: true).
  */
-await test("the WARP client_id lands in the packet header by default", async () => {
-	const profile = await generateProfile({ seed: "clientid" })
+await test("the WARP client_id lands in the packet header when useClientIdHeaders is enabled", async () => {
+	const profile = await generateProfile({ seed: "clientid", useClientIdHeaders: true })
 	const [r0, r1, r2] = profile.warp.reserved.bytes
 	const base = r0 * 0x100 + r1 * 0x10000 + r2 * 0x1000000
 	assert.equal(profile.obfuscation.headersFromClientId, true)
@@ -511,11 +496,10 @@ await test("the WARP client_id lands in the packet header by default", async () 
 	assert.ok(profile.configs.amneziawg.content.includes(String(base + 1)))
 })
 
-await test("a header-less profile is called out as the no-internet case", async () => {
-	const profile = await generateProfile({ seed: "clientid", useClientIdHeaders: false })
+await test("by default WARP configs stay wire-compatible without custom headers", async () => {
+	const profile = await generateProfile({ seed: "clientid" })
 	assert.equal(profile.obfuscation.headersFromClientId, false)
 	assert.equal(profile.obfuscation.params.h1, undefined)
-	assert.ok(profile.warnings.some((w) => w.includes("client_id is missing")))
 })
 
 await test("a high client_id byte still produces headers", async () => {
@@ -534,11 +518,9 @@ await test("a high client_id byte still produces headers", async () => {
 	assert.equal(check.valid, true, check.errors.join("; "))
 })
 
-await test("every registration gets its client_id into the header", async () => {
-	// Was ~50% before the uint32 fix, and every miss was a tunnel that connects
-	// and carries nothing.
+await test("every registration gets its client_id derived when requested", async () => {
 	for (let i = 0; i < 25; i++) {
-		const profile = await generateProfile({})
+		const profile = await generateProfile({ useClientIdHeaders: true })
 		assert.equal(
 			profile.obfuscation.headersFromClientId,
 			true,
@@ -548,7 +530,7 @@ await test("every registration gets its client_id into the header", async () => 
 })
 
 await test("client_id headers never bring forbidden padding with them", async () => {
-	const profile = await generateProfile({ seed: "clientid" })
+	const profile = await generateProfile({ seed: "clientid", useClientIdHeaders: true })
 	// S1/S2 are AmneziaWG-only. Cloudflare runs stock WireGuard and would drop
 	// the handshake outright, so they must stay at zero on every WARP profile.
 	assert.equal(profile.obfuscation.params.s1, 0)

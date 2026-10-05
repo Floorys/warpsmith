@@ -5,6 +5,7 @@
  *   - `.conf` for AmneziaWG / awg-quick (obfuscation parameters included)
  *   - `.conf` for stock WireGuard / wg-quick (obfuscation stripped)
  *   - JSON, for scripting and for re-importing into this tool
+ *   - a `vpn://` share string, importable by the AmneziaVPN app in one tap
  */
 
 import { renderObfuscationLines } from "./amnezia.js"
@@ -43,12 +44,11 @@ function header(profile, flavor) {
 		lines.push("# silently drop the handshake. Point this config at your own")
 		lines.push("# AmneziaWG server, or pick a warp-* profile instead.")
 	} else if (obfuscation?.enabled) {
-		lines.push("# WARP-compatible: junk packets (Jc/Jmin/Jmax) only, which stock")
-		lines.push("# WireGuard ignores, and no S1/S2 padding, so the handshake works.")
-		if (obfuscation.headersFromClientId) {
-			lines.push("# H1-H4 are present and deliberately not random: they carry the")
-			lines.push("# Cloudflare client_id, exactly as the official WARP client does.")
-		}
+		lines.push("# WARP-compatible: junk packets (Jc/Jmin/Jmax) and, on AmneziaWG 1.5")
+		lines.push("# clients, fake protocol packets (I1-I5). No S1/S2 padding and no")
+		lines.push("# H1-H4: Cloudflare parses the full 4-byte header of every packet and")
+		lines.push("# accepts only the stock 1/2/3/4, so a client without H lines falls")
+		lines.push("# back to exactly those values - which is what works.")
 	}
 	if (meta.mock) {
 		lines.push("#")
@@ -98,17 +98,10 @@ export function renderAmneziaWG(profile) {
 		lines.push("")
 		lines.push(`# Cloudflare client_id = ${warp.reserved.base64}`)
 		lines.push(`# Reserved bytes = [${warp.reserved.bytes.join(", ")}]`)
-		if (obfuscation?.headersFromClientId) {
-			lines.push("# These bytes are folded into H1-H4 above, which is exactly how the")
-			lines.push("# official WARP client marks its packets. The low byte still carries")
-			lines.push("# the real message type, so Cloudflare accepts the packet, and the")
-			lines.push("# header stops being a constant 01/02/03/04 for anyone watching.")
-		} else {
-			lines.push("# WARNING: this config does NOT carry them in the header. Cloudflare")
-			lines.push("# completes the handshake and can still drop every transport packet,")
-			lines.push("# which looks exactly like 'connected, but no internet'. Regenerate")
-			lines.push("# without --no-client-id-headers, or use a client that sets Reserved.")
-		}
+		lines.push("# AmneziaWG does not need these bytes: it sends the stock WireGuard")
+		lines.push("# header, which Cloudflare accepts. They matter only for clients")
+		lines.push("# that speak the WARP flavour of the protocol (warp-plus, sing-box,")
+		lines.push("# v2ray wireguard outbound) - those read them from the JSON export.")
 	}
 
 	return join(lines)
@@ -127,10 +120,10 @@ export function renderWireGuard(profile) {
 		...header(profile, "WireGuard"),
 		"# Obfuscation parameters are intentionally omitted: stock wg-quick rejects them.",
 		"#",
-		"# Two consequences, both of them yours to live with: stock WireGuard cannot",
-		"# write the Cloudflare client_id into the reserved header bytes, and it sends",
-		"# a textbook handshake that DPI recognises instantly. Prefer the AmneziaWG",
-		"# file; keep this one only for clients that cannot read the other format.",
+		"# Two consequences, both of them yours to live with: wg-quick cannot",
+		"# obfuscate the handshake in any way, and it sends the stock 1/2/3/4",
+		"# header that DPI recognises instantly. Prefer the AmneziaWG file; keep",
+		"# this one only for clients that cannot read the other format.",
 		"",
 		"[Interface]",
 		`PrivateKey = ${keys.privateKey}`,
@@ -201,13 +194,216 @@ export function renderJson(profile) {
  * Linux, and awg-quick derives the interface name from the filename, so keep
  * the stem short.
  * @param {Object} profile
- * @param {"awg"|"wg"|"json"} kind
+ * @param {"awg"|"wg"|"json"|"vpn"|"mihomo"|"singbox"} kind
  */
 export function suggestFilename(profile, kind) {
 	const tag = profile.meta.seed.slice(0, 6)
 	if (kind === "json") return `warp-${tag}.json`
 	if (kind === "wg") return `wg-${tag}.conf`
+	if (kind === "vpn") return `warp-${tag}.txt`
+	if (kind === "mihomo") return `warp-${tag}.yaml`
+	if (kind === "singbox") return `singbox-${tag}.json`
 	return `awg-${tag}.conf`
+}
+
+/**
+ * Render Mihomo / Clash.Meta YAML proxy block.
+ * @param {Object} profile
+ * @returns {string}
+ */
+export function renderMihomo(profile) {
+	const { keys, warp, network, endpoint, obfuscation } = profile
+	const isAwg = obfuscation.enabled && obfuscation.params?.jc !== undefined
+	const p = obfuscation.params || {}
+
+	const lines = [
+		`# Mihomo / Clash.Meta proxy configuration`,
+		`# Generated: ${profile.meta.generatedAt}`,
+		`proxies:`,
+		`  - name: "WARP-AmneziaWG"`,
+		`    type: wireguard`,
+		`    server: "${endpoint.host}"`,
+		`    port: ${endpoint.port}`,
+		`    ip: "${warp.addressV4 || "172.16.0.2"}"`,
+	]
+
+	if (warp.addressV6 && network.addresses.some((a) => a.includes(":"))) {
+		lines.push(`    ipv6: "${warp.addressV6}"`)
+	}
+
+	lines.push(
+		`    public-key: "${warp.peerPublicKey}"`,
+		`    private-key: "${keys.privateKey}"`,
+	)
+
+	if (network.presharedKey) {
+		lines.push(`    preshared-key: "${network.presharedKey}"`)
+	}
+
+	lines.push(
+		`    udp: true`,
+		`    remote-dns-resolve: true`,
+		`    dns:`,
+	)
+	for (const dnsServer of network.dns) {
+		lines.push(`      - "${dnsServer}"`)
+	}
+
+	if (network.mtu) {
+		lines.push(`    mtu: ${network.mtu}`)
+	}
+
+	if (warp.reserved?.bytes) {
+		lines.push(`    reserved: [${warp.reserved.bytes.join(", ")}]`)
+	}
+
+	if (isAwg) {
+		lines.push(`    amnezia-wg-option:`)
+		lines.push(`      jc: ${p.jc ?? 0}`)
+		lines.push(`      jmin: ${p.jmin ?? 0}`)
+		lines.push(`      jmax: ${p.jmax ?? 0}`)
+		lines.push(`      s1: ${p.s1 ?? 0}`)
+		lines.push(`      s2: ${p.s2 ?? 0}`)
+		if (p.h1) {
+			lines.push(`      h1: ${p.h1}`)
+			lines.push(`      h2: ${p.h2}`)
+			lines.push(`      h3: ${p.h3}`)
+			lines.push(`      h4: ${p.h4}`)
+		}
+		if (obfuscation.signatures?.[0]?.template) {
+			lines.push(`      i1: ${JSON.stringify(obfuscation.signatures[0].template)}`)
+		}
+	}
+
+	return join(lines)
+}
+
+/**
+ * Render Sing-Box outbound JSON format.
+ * @param {Object} profile
+ * @returns {string}
+ */
+export function renderSingBox(profile) {
+	const { keys, warp, network, endpoint, obfuscation } = profile
+	const p = obfuscation.params || {}
+	const isAwg = obfuscation.enabled && obfuscation.params?.jc !== undefined
+
+	const outbound = {
+		type: "wireguard",
+		tag: "warp-out",
+		server: endpoint.host,
+		server_port: endpoint.port,
+		local_address: network.addresses,
+		private_key: keys.privateKey,
+		peer_public_key: warp.peerPublicKey,
+		mtu: network.mtu,
+	}
+
+	if (warp.reserved?.bytes) {
+		outbound.reserved = warp.reserved.bytes
+	}
+
+	if (network.presharedKey) {
+		outbound.pre_shared_key = network.presharedKey
+	}
+
+	if (isAwg) {
+		outbound.amnezia_wg = {
+			jc: p.jc ?? 0,
+			jmin: p.jmin ?? 0,
+			jmax: p.jmax ?? 0,
+			s1: p.s1 ?? 0,
+			s2: p.s2 ?? 0,
+			h1: p.h1 ?? 1,
+			h2: p.h2 ?? 2,
+			h3: p.h3 ?? 3,
+			h4: p.h4 ?? 4,
+			i1: obfuscation.signatures?.[0]?.template ?? undefined,
+		}
+	}
+
+	return JSON.stringify(outbound, null, 2) + "\n"
+}
+
+/**
+ * Render a `vpn://` share string that the AmneziaVPN mobile/desktop app
+ * imports in one tap (Menu -> "Add by link").
+ *
+ * The payload is a JSON document describing a third-party AmneziaWG
+ * container, base64-encoded with the `vpn://` prefix - the same structure the
+ * widely used bash-warp-generator emits, so anything that accepts its configs
+ * accepts ours. `last_config` is the full AmneziaWG config with CRLF line
+ * endings, as the app's parser expects.
+ *
+ * @param {Object} profile
+ * @returns {string} the `vpn://...` one-liner
+ */
+export function renderAmneziaVpn(profile) {
+	const { keys, warp, network, endpoint, obfuscation } = profile
+
+	const confLines = [
+		"[Interface]",
+		`PrivateKey = ${keys.privateKey}`,
+		...renderObfuscationLines(obfuscation),
+		`Address = ${network.addresses.join(", ")}`,
+		`DNS = ${network.dns.join(", ")}`,
+		`MTU = ${network.mtu}`,
+		"",
+		"[Peer]",
+		`PublicKey = ${warp.peerPublicKey}`,
+		`AllowedIPs = ${network.allowedIps.join(", ")}`,
+		`Endpoint = ${endpoint.endpoint}`,
+	]
+	if (network.keepalive) confLines.push(`PersistentKeepalive = ${network.keepalive}`)
+	if (network.presharedKey) confLines.push(`PresharedKey = ${network.presharedKey}`)
+	const conf = confLines.join("\r\n")
+
+	// The app reads every value as a string except mtu; keep the exact shapes
+	// bash-warp-generator produces.
+	const host = endpoint.host
+	const params = obfuscation.params || {}
+	const awg = {
+		H1: String(params.h1 ?? 1),
+		H2: String(params.h2 ?? 2),
+		H3: String(params.h3 ?? 3),
+		H4: String(params.h4 ?? 4),
+		I1: obfuscation.signatures?.[0]?.template ?? "",
+		Jc: String(params.jc ?? 0),
+		Jmax: String(params.jmax ?? 0),
+		Jmin: String(params.jmin ?? 0),
+		S1: String(params.s1 ?? 0),
+		S2: String(params.s2 ?? 0),
+		allowed_ips: network.allowedIps,
+		client_ip: network.addresses.join(", "),
+		client_priv_key: keys.privateKey,
+		config: conf,
+		hostName: host,
+		mtu: network.mtu,
+		port: String(endpoint.port),
+		server_pub_key: warp.peerPublicKey,
+	}
+	// Empty I1 means "no fake packets": drop the key so old clients do not
+	// try to parse an empty template.
+	if (!awg.I1) delete awg.I1
+
+	const container = {
+		containers: [
+			{
+				container: "amnezia-awg",
+				awg: {
+					isThirdPartyConfig: true,
+					last_config: JSON.stringify(awg),
+					port: String(endpoint.port),
+					transport_proto: "udp",
+				},
+			},
+		],
+		defaultContainer: "amnezia-awg",
+		description: "Cloudflare WARP",
+		hostName: host,
+	}
+
+	return `vpn://${Buffer.from(JSON.stringify(container), "utf8").toString("base64")}`
 }
 
 /**
@@ -224,9 +420,21 @@ export function renderAll(profile) {
 			filename: suggestFilename(profile, "wg"),
 			content: renderWireGuard(profile),
 		},
+		mihomo: {
+			filename: suggestFilename(profile, "mihomo"),
+			content: renderMihomo(profile),
+		},
+		singbox: {
+			filename: suggestFilename(profile, "singbox"),
+			content: renderSingBox(profile),
+		},
 		json: {
 			filename: suggestFilename(profile, "json"),
 			content: renderJson(profile),
+		},
+		vpn: {
+			filename: suggestFilename(profile, "vpn"),
+			content: renderAmneziaVpn(profile),
 		},
 	}
 }

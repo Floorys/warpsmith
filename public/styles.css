@@ -482,6 +482,80 @@ summary:focus-visible {
 	margin-top: 4px;
 }
 
+/* ------------------------ Obfuscation Mode Switcher ------------------------ */
+
+.obf-mode-switch {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 10px;
+	margin-bottom: 14px;
+	padding: 6px;
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+}
+
+.obf-mode-btn {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 10px 14px;
+	border: 1px solid transparent;
+	border-radius: calc(var(--radius) - 2px);
+	background: transparent;
+	color: var(--text-2);
+	cursor: pointer;
+	text-align: left;
+	font: inherit;
+	transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+.obf-mode-btn span:last-child {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.obf-mode-btn strong {
+	font-size: 13px;
+	color: var(--text-1);
+}
+
+.obf-mode-btn small {
+	font-size: 11px;
+	color: var(--text-2);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.obf-mode-btn__icon {
+	font-size: 20px;
+	flex: none;
+}
+
+.obf-mode-btn:hover {
+	background: var(--field);
+	color: var(--text);
+}
+
+.obf-mode-btn.is-active {
+	background: var(--accent-soft);
+	border-color: var(--accent);
+	color: var(--text);
+}
+
+.obf-mode-btn.is-active strong {
+	color: var(--accent);
+}
+
+@media (max-width: 600px) {
+	.obf-mode-switch {
+		grid-template-columns: 1fr;
+	}
+}
+
 /* ------------------------------- Profiles -------------------------------- */
 
 .profiles {
@@ -773,6 +847,104 @@ summary:focus-visible {
 	font-family: var(--mono);
 	font-size: 12px;
 	color: var(--text-2);
+}
+
+/* -------------------------------- WarpScout ------------------------------ */
+
+.scout-panel {
+	margin-top: 16px;
+	padding: 18px;
+	border: 1px solid var(--accent);
+	border-radius: var(--radius);
+	background: rgba(164, 130, 255, 0.08);
+}
+
+.scout-panel__head {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	margin-bottom: 14px;
+}
+
+.scout-controls {
+	margin-bottom: 12px;
+	align-items: flex-end;
+}
+
+.scout__status {
+	font-size: 13px;
+	color: var(--accent);
+	margin: 12px 0 8px;
+}
+
+.scout__list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	max-height: 280px;
+	overflow-y: auto;
+	margin-bottom: 12px;
+}
+
+.scout__item {
+	display: grid;
+	grid-template-columns: minmax(130px, 1.2fr) minmax(65px, 0.5fr) minmax(110px, 1.2fr) 80px;
+	gap: 10px;
+	align-items: center;
+	padding: 9px 12px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--field);
+	font-size: 13px;
+}
+
+.scout__item:hover {
+	border-color: var(--accent);
+	background: var(--surface);
+}
+
+.scout__ep {
+	font-family: var(--mono);
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--text-1);
+}
+
+.scout__ping {
+	font-family: var(--mono);
+	font-size: 12px;
+	color: var(--text-2);
+}
+
+.scout__loc {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 12px;
+	color: var(--text-2);
+}
+
+.scout-import {
+	margin-top: 14px;
+	font-size: 12px;
+}
+
+.scout-import summary {
+	cursor: pointer;
+	color: var(--accent);
+}
+
+.scout-import textarea {
+	width: 100%;
+	margin: 8px 0;
+	background: var(--field);
+	color: var(--text-1);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	padding: 8px;
+	font-family: var(--mono);
+	font-size: 12px;
+	box-sizing: border-box;
 }
 
 /* -------------------------------- Actions -------------------------------- */

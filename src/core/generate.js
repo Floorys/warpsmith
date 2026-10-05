@@ -10,6 +10,7 @@ import { buildEndpoint, describeColo, probeColo } from "./endpoints.js"
 import {
 	generateObfuscation,
 	validateObfuscation,
+	deriveWarpHeaders,
 	PROFILES,
 	PACKET_SIGNATURES,
 	MIMICRY_DOMAINS,
@@ -231,23 +232,28 @@ export async function generateProfile(options = {}) {
 	}
 
 	// 5. Obfuscation -----------------------------------------------------------
-	// `reserved` is passed so that H1-H4 can be derived from the WARP client_id
-	// instead of being random - the only form of header obfuscation Cloudflare
-	// will still accept. See deriveWarpHeaders() in amnezia.js.
 	const obfuscation = generateObfuscation({
 		profile: options.obfuscation ?? DEFAULT_PROFILE,
 		seed: `${seed}:obfuscation`,
 		overrides: options.obfuscationOverrides,
 		signatures: options.signatures,
-		mimicryDomain: options.mimicryDomain,
-		reserved: warp.reserved?.bytes,
-		// Default ON, and this is the important part. The official WARP client
-		// always carries its client_id in the three reserved header bytes.
-		// A config without them completes the handshake and then has its
-		// transport packets dropped by the edge: "connected, no internet".
-		// Pass false only to reproduce a bare stock-WireGuard header.
-		useClientIdHeaders: options.useClientIdHeaders !== false,
+		mimicryDomain: options.mimicryDomain || options.sni,
 	})
+
+	if (obfuscation.enabled && warp.reserved?.bytes && options.useClientIdHeaders === true && obfuscation.compat === "warp") {
+		const clientHeaders = deriveWarpHeaders(warp.reserved.bytes)
+		if (clientHeaders) {
+			Object.assign(obfuscation.params, clientHeaders)
+			obfuscation.headersFromClientId = true
+			obfuscation.validation = validateObfuscation(
+				obfuscation.params,
+				{ compat: obfuscation.compat, headersFromClientId: true },
+			)
+		}
+	} else {
+		obfuscation.headersFromClientId = false
+	}
+
 	if (!obfuscation.validation.valid) {
 		throw new GenerateError(
 			`Invalid obfuscation parameters: ${obfuscation.validation.errors.join("; ")}`,
@@ -323,17 +329,13 @@ function collectWarnings(profile) {
 			"MOCK MODE is on. This config contains synthetic credentials and will not connect.",
 		)
 	}
-	// The classic WARP failure: the tunnel comes up, the handshake succeeds, and
-	// then not a single packet makes it back. Almost always a missing client_id.
 	if (
 		profile.obfuscation.compat === "warp" &&
-		profile.warp.reserved &&
-		!profile.obfuscation.headersFromClientId
+		profile.obfuscation.signatures.length > 0
 	) {
-		warnings.unshift(
-			"The Cloudflare client_id is missing from the packet header. WARP will complete " +
-				"the handshake and can still drop every transport packet, which looks exactly " +
-				'like "connected, but no internet". Regenerate with client_id headers enabled.',
+		warnings.push(
+			"The fake protocol packets (I1-I5) require AmneziaWG 1.5+ on the client. " +
+				"On older clients the config will not import.",
 		)
 	}
 
@@ -369,7 +371,7 @@ function collectWarnings(profile) {
 			"You picked an IPv6 endpoint. It only works if your ISP gives you real IPv6 connectivity.",
 		)
 	}
-	if (profile.obfuscation.version === "1.5") {
+	if (profile.obfuscation.version === "1.5" && profile.obfuscation.compat === "awg") {
 		warnings.push(
 			"This profile uses AmneziaWG 1.5 features (I1..I5). Older AmneziaWG clients cannot parse it.",
 		)

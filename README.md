@@ -236,7 +236,7 @@ curl -s localhost:8787/api/generate \
   -d '{"obfuscation":"balanced","pathMtu":1500}' | jq -r .configs.amneziawg.content
 ```
 
-Токен устройства Cloudflare **никогда** не отдаётся �� браузер: им можно удалить
+Токен устройства Cloudflare **никогда** не отдаётся в браузер: им можно удалить
 регистрацию, поэтому он вырезается из ответа `/api/generate`.
 
 ### Переменные окружения

@@ -147,7 +147,7 @@ export const ALLOWED_IPS_PRESETS = {
 			"196.0.0.0/6",
 			"200.0.0.0/5",
 			"208.0.0.0/4",
-			"::/0",
+			"2000::/3",
 		],
 		note: "Routes all public traffic but leaves 10/8, 172.16/12 and 192.168/16 on your local network, so printers, NAS and your router stay reachable.",
 	},

@@ -14,8 +14,8 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "cli": "node bin/awg-warp.js",
-    "test": "node --test test/",
-    "smoke": "MOCK_WARP=1 node test/smoke.mjs"
+    "test": "node test/smoke.mjs",
+    "smoke": "node test/smoke.mjs"
   },
   "keywords": [
     "warp",

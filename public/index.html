@@ -192,6 +192,46 @@
 									<span class="field__hint" data-i18n="loc.pinHint">Переопределяет префикс и порт выше.</span>
 								</label>
 
+								<div class="scout-panel" id="scoutPanel">
+									<div class="scout-panel__head">
+										<div>
+											<strong style="color:var(--accent);" data-i18n="scout.title">⚡ WarpScout Endpoint Scanner</strong>
+											<p class="field__hint" style="margin:2px 0 0;" data-i18n="scout.desc">
+												Автосканер рабочих Cloudflare WARP IP и портов с поддержкой WireGuard / MASQUE и обходом ТСПУ.
+											</p>
+										</div>
+										<span class="pill pill--muted" id="scoutBinaryBadge">WarpScout</span>
+									</div>
+
+									<div class="scout-controls grid grid--3">
+										<label class="field">
+											<span class="field__label" data-i18n="scout.proto">Протокол проверки</span>
+											<select id="scoutProto">
+												<option value="wireguard">WireGuard / Amnezia</option>
+												<option value="masque">MASQUE (HTTP/3)</option>
+											</select>
+										</label>
+										<label class="field">
+											<span class="field__label" data-i18n="scout.sni">SNI маскировки</span>
+											<input id="scoutSni" type="text" value="www.apple.com" placeholder="www.apple.com" spellcheck="false" autocomplete="off" />
+										</label>
+										<div>
+											<button class="btn btn--primary btn--sm" id="scoutScanBtn" type="button" style="width:100%;margin-top:20px;" data-i18n="scout.scanBtn">
+												⚡ Найти живые IP
+											</button>
+										</div>
+									</div>
+
+									<div class="scout__status" id="scoutStatus" hidden></div>
+									<div class="scout__list" id="scoutList" hidden></div>
+
+									<details class="scout-import">
+										<summary data-i18n="scout.importTitle">Вставить лог WarpScout или IP вручную</summary>
+										<textarea id="scoutImportText" rows="3" placeholder="162.159.193.1:2408 120ms FRA&#10;162.159.192.10:4500"></textarea>
+										<button class="btn btn--ghost btn--sm" id="scoutImportBtn" type="button" data-i18n="scout.importBtn">Импортировать IP</button>
+									</details>
+								</div>
+
 								<label class="check">
 									<input type="checkbox" id="detectLocation" checked />
 									<span>
@@ -206,6 +246,23 @@
 									<h2 data-i18n="obf.title">Обфускация</h2>
 									<button class="btn btn--ghost btn--sm" id="rerollBtn" type="button" data-i18n="obf.reroll">
 										Перегенерировать
+									</button>
+								</div>
+
+								<div class="obf-mode-switch" role="group" aria-label="Режим обфускации">
+									<button type="button" class="obf-mode-btn is-active" id="obfModeWarp" data-mode="warp">
+										<span class="obf-mode-btn__icon">🌐</span>
+										<span>
+											<strong data-i18n="obf.modeWarp">Для Cloudflare WARP</strong>
+											<small data-i18n="obf.modeWarpSub">Junk-мусор, без паддинга (гарантия связи)</small>
+										</span>
+									</button>
+									<button type="button" class="obf-mode-btn" id="obfModeAwg" data-mode="awg">
+										<span class="obf-mode-btn__icon">🖥️</span>
+										<span>
+											<strong data-i18n="obf.modeAwg">Для своего сервера (AmneziaWG)</strong>
+											<small data-i18n="obf.modeAwgSub">S1/S2, H1–H4, полная маскировка VPS</small>
+										</span>
 									</button>
 								</div>
 
@@ -242,6 +299,12 @@
 											<span class="field__hint" data-i18n="mim.customHint">Перебивает выбор слева.</span>
 										</label>
 									</div>
+
+									<div class="note note--info" style="margin-top:10px;">
+										<p data-i18n="mim.sniNote">
+											<strong>Подмена SNI:</strong> Пакеты первичного рукопожатия маскируются под легитимный HTTPS/QUIC трафик (например, Apple или Microsoft). Системы ТСПУ/DPI видят разрешённое доменное имя в заголовках и пропускают соединение.
+										</p>
+									</div>
 								</div>
 
 								<div class="params" id="paramsPanel">
@@ -268,7 +331,7 @@
 										<span class="field__opt" data-i18n="obf.seedOpt">воспроизводит профиль</span>
 									</span>
 									<input id="seed" type="text" data-i18n-ph="obf.seedPh" placeholder="оставьте пустым для нового" spellcheck="false" autocomplete="off" />
-									<span class="field__hint" data-i18n="obf.seedHint">Вставьте прошлый seed, чтобы получить точно такую ��е обфускацию на другом устройстве.</span>
+									<span class="field__hint" data-i18n="obf.seedHint">Вставьте прошлый seed, чтобы получить точно такую же обфускацию на другом устройстве.</span>
 								</label>
 							</section>
 
@@ -354,7 +417,10 @@
 								<div class="tabs" role="tablist">
 									<button class="tab is-active" data-tab="amneziawg" role="tab">AmneziaWG</button>
 									<button class="tab" data-tab="wireguard" role="tab">WireGuard</button>
+									<button class="tab" data-tab="mihomo" role="tab">Mihomo (Clash)</button>
+									<button class="tab" data-tab="singbox" role="tab">Sing-Box</button>
 									<button class="tab" data-tab="json" role="tab">JSON</button>
+									<button class="tab" data-tab="vpn" role="tab">vpn:// AmneziaVPN</button>
 								</div>
 
 								<div class="output__body">

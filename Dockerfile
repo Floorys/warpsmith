@@ -13,7 +13,7 @@ ENV PORT=8787
 ENV HOST=0.0.0.0
 EXPOSE 8787
 
-RUN addgroup -S awg && adduser -S awg -G awg
+RUN addgroup -S awg && adduser -S awg -G awg && chown -R awg:awg /app
 USER awg
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \

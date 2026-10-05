@@ -128,6 +128,7 @@ function mockRegistration(publicKey) {
 			quota: 0,
 			warp_plus: false,
 		},
+		warp_enabled: true,
 		config: {
 			client_id: d.subarray(0, 3).toString("base64"),
 			peers: [
@@ -184,6 +185,26 @@ export async function registerDevice(options) {
 	if (!body?.config?.peers?.length) {
 		throw new WarpApiError("Registration succeeded but no peer was returned", { body })
 	}
+
+	// Cloudflare creates the registration with warp_enabled = false.
+	// We MUST PATCH it with warp_enabled: true (like official clients and bash-warp-generator),
+	// otherwise Cloudflare will not route any internet traffic.
+	if (body.id && body.token) {
+		try {
+			const patched = await apiFetch(`${WARP_API_BASE}/reg/${body.id}`, {
+				method: "PATCH",
+				headers: apiHeaders(body.token),
+				body: JSON.stringify({ warp_enabled: true }),
+				timeoutMs,
+			})
+			if (patched?.config?.peers?.length) {
+				return { ...body, ...patched, config: patched.config, warp_enabled: true }
+			}
+		} catch {
+			// proceed with initial body if patch fails
+		}
+	}
+
 	return body
 }
 

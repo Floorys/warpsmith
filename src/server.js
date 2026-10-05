@@ -30,6 +30,12 @@ import {
 } from "./core/amnezia.js"
 import { calculateMtu, PATH_PRESETS } from "./core/mtu.js"
 import { WarpApiError, isMockMode } from "./core/warp.js"
+import {
+	findWarpscoutBinary,
+	downloadWarpscout,
+	scoutEndpoints,
+	parseWarpscoutOutput,
+} from "./core/scout.js"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PUBLIC_DIR = path.resolve(__dirname, "../public")
@@ -190,18 +196,13 @@ const routes = {
 			seed: body.seed,
 			overrides: body.overrides,
 			signatures: body.signatures,
-			mimicryDomain: body.mimicryDomain,
-			reserved: body.reserved,
-			// Opt out, not opt in: see generate.js for why the client_id must be
-			// in the header by default.
-			useClientIdHeaders: body.useClientIdHeaders !== false,
+			mimicryDomain: body.sni || body.mimicryDomain,
 		})
 	},
 
 	"POST /api/validate": async (body) =>
 		validateObfuscation(body.params ?? body, {
 			compat: body.compat,
-			headersFromClientId: body.headersFromClientId === true,
 		}),
 
 	"POST /api/mtu": async (body) =>
@@ -210,6 +211,15 @@ const routes = {
 			outerFamily: body.outerFamily,
 			conservative: body.conservative,
 		}),
+
+	// WarpScout status, download & scanning
+	"GET /api/scout/status": async () => findWarpscoutBinary(),
+	"POST /api/scout/download": async () => downloadWarpscout(),
+	"POST /api/scout/scan": async (body) => scoutEndpoints(body),
+	"POST /api/scout/import": async (body) => ({
+		ok: true,
+		endpoints: parseWarpscoutOutput(body.text || ""),
+	}),
 
 	// Measure which Cloudflare datacenter each endpoint actually lands in.
 	"POST /api/scan": async (body) =>
@@ -235,8 +245,7 @@ const routes = {
 			obfuscation: body.obfuscation,
 			obfuscationOverrides: body.obfuscationOverrides,
 			signatures: body.signatures,
-			mimicryDomain: body.mimicryDomain,
-			useClientIdHeaders: body.useClientIdHeaders,
+			mimicryDomain: body.sni || body.mimicryDomain,
 			endpointPrefix: body.endpointPrefix,
 			endpointPort: body.endpointPort,
 			endpointHost: body.endpointHost,
