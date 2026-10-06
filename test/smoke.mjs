@@ -20,6 +20,7 @@ const { createRng } = await import("../src/core/rand.js")
 const { generateKeyPair, derivePublicKey } = await import("../src/core/keys.js")
 const { calculateMtu, DNS_PRESETS } = await import("../src/core/mtu.js")
 const { buildEndpoint } = await import("../src/core/endpoints.js")
+const { resolvePathname, handleRequest } = await import("../src/server.js")
 
 let passed = 0
 let failed = 0
@@ -538,5 +539,103 @@ await test("client_id headers never bring forbidden padding with them", async ()
 	assert.equal(profile.obfuscation.validation.valid, true)
 })
 
+console.log("\nserverless & routing")
+
+await test("resolvePathname handles standard requests", () => {
+	const req = { headers: {} }
+	const url = new URL("http://localhost/api/options")
+	assert.equal(resolvePathname(req, url), "/api/options")
+})
+
+await test("resolvePathname handles Vercel __route rewrite query param", () => {
+	const req = { headers: {} }
+	const url = new URL("http://localhost/api/index.js?__route=options")
+	assert.equal(resolvePathname(req, url), "/api/options")
+})
+
+await test("resolvePathname handles Vercel x-matched-path header", () => {
+	const req = { headers: { "x-matched-path": "/api/health" } }
+	const url = new URL("http://localhost/api/index.js")
+	assert.equal(resolvePathname(req, url), "/api/health")
+})
+
+await test("resolvePathname handles Vercel x-now-route-matches regex header", () => {
+	const req = { headers: { "x-now-route-matches": "1=scout%2Fscan" } }
+	const url = new URL("http://localhost/api/index.js")
+	assert.equal(resolvePathname(req, url), "/api/scout/scan")
+})
+
+await test("resolvePathname handles Vercel catch-all query path array", () => {
+	const req = { headers: {}, query: { path: ["scout", "status"] } }
+	const url = new URL("http://localhost/api/index.js")
+	assert.equal(resolvePathname(req, url), "/api/scout/status")
+})
+
+await test("handleRequest serves options and health on Vercel rewrite", async () => {
+	function createMockRes() {
+		return {
+			headers: {},
+			statusCode: 200,
+			body: "",
+			setHeader(k, v) { this.headers[k] = v },
+			writeHead(code, h) { this.statusCode = code; Object.assign(this.headers, h) },
+			end(data) { this.body = data },
+		}
+	}
+
+	// Simulated Vercel rewrite with __route
+	const req1 = {
+		method: "GET",
+		url: "/api/index.js?__route=options",
+		headers: { host: "warpsmith-vggf.vercel.app" },
+	}
+	const res1 = createMockRes()
+	await handleRequest(req1, res1)
+	assert.equal(res1.statusCode, 200)
+	const parsed1 = JSON.parse(res1.body)
+	assert.ok(parsed1.obfuscationProfiles)
+
+	// Simulated Vercel rewrite with x-matched-path
+	const req2 = {
+		method: "GET",
+		url: "/api/index.js",
+		headers: {
+			host: "warpsmith-vggf.vercel.app",
+			"x-matched-path": "/api/health",
+		},
+	}
+	const res2 = createMockRes()
+	await handleRequest(req2, res2)
+	assert.equal(res2.statusCode, 200)
+	const parsed2 = JSON.parse(res2.body)
+	assert.equal(parsed2.ok, true)
+
+	// Fallback when /api/index.js is directly called
+	const req3 = {
+		method: "GET",
+		url: "/api/index.js",
+		headers: { host: "warpsmith-vggf.vercel.app" },
+	}
+	const res3 = createMockRes()
+	await handleRequest(req3, res3)
+	assert.equal(res3.statusCode, 200)
+	const parsed3 = JSON.parse(res3.body)
+	assert.equal(parsed3.ok, true)
+
+	// Simulated POST with pre-parsed req.body in serverless
+	const req4 = {
+		method: "POST",
+		url: "/api/index.js?__route=obfuscation",
+		headers: { host: "warpsmith-vggf.vercel.app" },
+		body: { profile: "warp-cloak" },
+	}
+	const res4 = createMockRes()
+	await handleRequest(req4, res4)
+	assert.equal(res4.statusCode, 200)
+	const parsed4 = JSON.parse(res4.body)
+	assert.equal(parsed4.profile, "warp-cloak")
+})
+
 console.log(`\n${passed} passed, ${failed} failed\n`)
 process.exit(failed ? 1 : 0)
+

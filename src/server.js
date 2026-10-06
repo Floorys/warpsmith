@@ -98,9 +98,11 @@ setInterval(() => {
 // --- Helpers ----------------------------------------------------------------
 
 function clientIp(req) {
-	const fwd = req.headers["x-forwarded-for"]
+	const fwd = req.headers?.["x-forwarded-for"]
 	if (typeof fwd === "string" && fwd.length) return fwd.split(",")[0].trim()
-	return req.socket.remoteAddress || "unknown"
+	const real = req.headers?.["x-real-ip"]
+	if (typeof real === "string" && real.length) return real.trim()
+	return req.socket?.remoteAddress || "unknown"
 }
 
 function sendJson(res, status, payload, extraHeaders = {}) {
@@ -115,6 +117,16 @@ function sendJson(res, status, payload, extraHeaders = {}) {
 }
 
 async function readJsonBody(req, limitBytes = 64 * 1024) {
+	if (req.body && typeof req.body === "object") {
+		return req.body
+	}
+	if (typeof req.body === "string") {
+		try {
+			return JSON.parse(req.body)
+		} catch {
+			throw new Error("Request body is not valid JSON")
+		}
+	}
 	const chunks = []
 	let size = 0
 	for await (const chunk of req) {
@@ -212,8 +224,17 @@ const routes = {
 			conservative: body.conservative,
 		}),
 
+	"GET /api": async () => routes["GET /api/health"](),
+	"GET /api/index.js": async () => routes["GET /api/health"](),
+
 	// WarpScout status, download & scanning
-	"GET /api/scout/status": async () => findWarpscoutBinary(),
+	"GET /api/scout/status": async () => {
+		const res = await findWarpscoutBinary()
+		return {
+			...res,
+			installed: res.available,
+		}
+	},
 	"POST /api/scout/download": async () => downloadWarpscout(),
 	"POST /api/scout/scan": async (body) => scoutEndpoints(body),
 	"POST /api/scout/import": async (body) => ({
@@ -271,12 +292,72 @@ const routes = {
 // --- Server -----------------------------------------------------------------
 
 /**
+ * Resolves the intended API route path from the incoming request.
+ * Normalizes rewrites across Vercel, serverless catch-all functions, reverse proxies, and local Node.
+ */
+export function resolvePathname(req, url) {
+	// 1. If query param __route was passed by vercel.json rewrite
+	const queryRoute =
+		url.searchParams.get("__route") ||
+		url.searchParams.get("__path") ||
+		(req.query && (req.query.__route || req.query.__path))
+	if (queryRoute) {
+		const clean = String(queryRoute).replace(/^\/+/, "")
+		return `/api/${clean}`
+	}
+
+	// 2. Check Vercel / proxy matched path headers
+	const matchedHeader =
+		req.headers["x-matched-path"] ||
+		req.headers["x-vercel-matched-path"] ||
+		req.headers["x-original-url"] ||
+		req.headers["x-forwarded-uri"]
+
+	if (matchedHeader) {
+		try {
+			const parsed = new URL(matchedHeader, "http://localhost")
+			const p = parsed.pathname
+			if (p && p !== "/api/index.js" && !p.endsWith("/api/index.js")) {
+				return p
+			}
+		} catch {
+			const clean = matchedHeader.split("?")[0]
+			if (clean && clean !== "/api/index.js" && !clean.endsWith("/api/index.js")) {
+				return clean
+			}
+		}
+	}
+
+	// 3. Check Vercel route regex matches header (e.g. "1=options" or "1=scout%2Fscan")
+	const routeMatches = req.headers["x-now-route-matches"]
+	if (routeMatches) {
+		try {
+			const params = new URLSearchParams(routeMatches)
+			const match1 = params.get("1")
+			if (match1) {
+				return `/api/${decodeURIComponent(match1).replace(/^\/+/, "")}`
+			}
+		} catch {
+			// ignore
+		}
+	}
+
+	// 4. Check Vercel catch-all route query parameter (e.g. api/[...path].js)
+	if (req.query?.path) {
+		const segments = Array.isArray(req.query.path) ? req.query.path.join("/") : req.query.path
+		return `/api/${String(segments).replace(/^\/+/, "")}`
+	}
+
+	return url.pathname
+}
+
+/**
  * The full request handler. Exported so that serverless runtimes (see
  * `api/index.js`) can reuse the exact same routing without opening a port.
  */
 export async function handleRequest(req, res) {
 	const url = new URL(req.url, `http://${req.headers.host || "localhost"}`)
-	const pathname = url.pathname
+	const pathname = resolvePathname(req, url)
 	const key = `${req.method} ${pathname}`
 
 	res.setHeader("X-Content-Type-Options", "nosniff")
@@ -342,6 +423,8 @@ export async function handleRequest(req, res) {
 			type: error.name,
 			hint: error.hint,
 			validation: error.validation,
+		}, {
+			"Access-Control-Allow-Origin": process.env.CORS_ORIGIN || "*",
 		})
 	}
 }

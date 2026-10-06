@@ -33,7 +33,15 @@ import { isMockMode } from "./warp.js"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT_DIR = path.resolve(__dirname, "../..")
-const BIN_DIR = path.resolve(ROOT_DIR, "bin")
+const IS_SERVERLESS = Boolean(
+	process.env.VERCEL ||
+		process.env.AWS_LAMBDA_FUNCTION_NAME ||
+		process.env.NETLIFY ||
+		process.env.FUNCTIONS_WORKER_RUNTIME,
+)
+const BIN_DIR = IS_SERVERLESS
+	? path.join(os.tmpdir(), "bin")
+	: path.resolve(ROOT_DIR, "bin")
 
 export const WARPSCOUT_REPO = "vernette/warpscout"
 export const WARPSCOUT_EXE = process.platform === "win32" ? "warpscout.exe" : "warpscout"
@@ -45,6 +53,7 @@ export const WARPSCOUT_EXE = process.platform === "win32" ? "warpscout.exe" : "w
 export async function findWarpscoutBinary() {
 	const candidates = [
 		path.join(BIN_DIR, WARPSCOUT_EXE),
+		path.join(ROOT_DIR, "bin", WARPSCOUT_EXE),
 		path.join(ROOT_DIR, WARPSCOUT_EXE),
 		WARPSCOUT_EXE, // PATH lookup
 	]

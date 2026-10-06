@@ -956,7 +956,7 @@ async function checkScoutStatus() {
 	if (!badge) return
 	try {
 		const status = await api("/api/scout/status")
-		if (status.installed) {
+		if (status.installed || status.available) {
 			badge.textContent = `WarpScout v${status.version || "1.x"}`
 			badge.className = "pill pill--ok"
 		} else {
